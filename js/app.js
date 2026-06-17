@@ -10,26 +10,134 @@ function getDragger(date,locId,da,workers,overrides){
   return sorted[0];
 }
 
+// ── Supabase row <-> app shape converters ──────────────────────────
+function rowToWorker(r){return{id:r.id,name:r.name,email:r.email,password:r.password,role:r.role,avail:r.avail||[],yearsExp:r.years_exp||0}}
+function rowToLoc(r){return{id:r.id,name:r.name,fields:r.fields||[]}}
+function rowToGame(r){return{id:r.id,locId:r.loc_id,field:r.field,division:r.division,date:r.date,time:r.time,home:r.home,away:r.away,status:r.status,ump1:r.ump1==null?NONE:r.ump1,ump2:r.ump2==null?NONE:r.ump2}}
+function rowToReq(r){return{id:r.id,type:r.type,workerId:r.worker_id,date:r.date,dateStart:r.date_start,dateEnd:r.date_end,locId:r.loc_id,role:r.role,label:r.label,reason:r.reason,claimedBy:r.claimed_by,status:r.status,created:r.created}}
+function rowToNotif(r){return{id:r.id,workerId:r.worker_id,msg:r.msg,time:r.time,read:r.read,type:r.type}}
+
+// Fire-and-forget Supabase write with console visibility on failure
+function swrite(promise){promise.then(({error})=>{if(error)console.error("Supabase write failed:",error)})}
+
 function App(){
-  const[user,setUser]=useState(null),[view,setView]=useState("dashboard"),[locs,setLocs]=useState(LOCS),[workers,setWorkers]=useState(WORKERS),[games,setGames]=useState(INIT_GAMES),[da,setDA]=useState(INIT_DA),[pub,setPub]=useState(INIT_PUB),[rsvp,setRsvp]=useState(INIT_RSVP),[requests,setRequests]=useState(INIT_REQUESTS),[notifs,setNotifs]=useState(INIT_NOTIFS),[modal,setModal]=useState(null),[toast,setToast]=useState(null),[draggerOverrides,setDraggerOverrides]=useState({});
+  const[user,setUser]=useState(null),[view,setView]=useState("dashboard"),[locs,setLocs]=useState([]),[workers,setWorkers]=useState([]),[games,setGames]=useState([]),[da,setDA]=useState({}),[pub,setPub]=useState(new Set()),[rsvp,setRsvp]=useState({}),[requests,setRequests]=useState([]),[notifs,setNotifs]=useState([]),[modal,setModal]=useState(null),[toast,setToast]=useState(null),[draggerOverrides,setDraggerOverrides]=useState({}),[loaded,setLoaded]=useState(false);
+
+  // ── Initial load from Supabase + realtime subscriptions for multi-device sync ──
+  React.useEffect(()=>{
+    (async()=>{
+      const[w,l,g,d,p,r,rq,n,dr]=await Promise.all([
+        sb.from('workers').select('*'),
+        sb.from('locations').select('*'),
+        sb.from('games').select('*'),
+        sb.from('day_assignments').select('*'),
+        sb.from('published_weeks').select('*'),
+        sb.from('rsvps').select('*'),
+        sb.from('requests').select('*'),
+        sb.from('notifications').select('*'),
+        sb.from('dragger_overrides').select('*'),
+      ]);
+      setWorkers((w.data||[]).map(rowToWorker));
+      setLocs((l.data||[]).map(rowToLoc));
+      setGames((g.data||[]).map(rowToGame));
+      const ndaMap={};(d.data||[]).forEach(row=>{ndaMap[row.date+"|"+row.loc_id]={fieldCrew:row.field_crew||[],concessions:row.concessions||[]}});
+      setDA(ndaMap);
+      setPub(new Set((p.data||[]).map(row=>row.week_key)));
+      const rsvpMap={};(r.data||[]).forEach(row=>{rsvpMap[row.worker_id+"_"+row.date+"_"+row.loc_id]=row.status});
+      setRsvp(rsvpMap);
+      setRequests((rq.data||[]).map(rowToReq));
+      setNotifs((n.data||[]).map(rowToNotif));
+      const drMap={};(dr.data||[]).forEach(row=>{drMap[row.date+"|"+row.loc_id]=row.worker_id});
+      setDraggerOverrides(drMap);
+      setLoaded(true);
+    })();
+
+    const ch=sb.channel('fieldsync-all')
+      .on('postgres_changes',{event:'*',schema:'public',table:'workers'},({eventType,new:nw,old})=>{
+        if(eventType==='DELETE')setWorkers(p=>p.filter(x=>x.id!==old.id));
+        else setWorkers(p=>{const w=rowToWorker(nw);const i=p.findIndex(x=>x.id===w.id);if(i===-1)return[...p,w];const c=[...p];c[i]=w;return c});
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'locations'},({eventType,new:nw,old})=>{
+        if(eventType==='DELETE')setLocs(p=>p.filter(x=>x.id!==old.id));
+        else setLocs(p=>{const l=rowToLoc(nw);const i=p.findIndex(x=>x.id===l.id);if(i===-1)return[...p,l];const c=[...p];c[i]=l;return c});
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'games'},({eventType,new:nw,old})=>{
+        if(eventType==='DELETE')setGames(p=>p.filter(x=>x.id!==old.id));
+        else setGames(p=>{const g=rowToGame(nw);const i=p.findIndex(x=>x.id===g.id);if(i===-1)return[...p,g];const c=[...p];c[i]=g;return c});
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'day_assignments'},({eventType,new:nw,old})=>{
+        const key=eventType==='DELETE'?old.date+"|"+old.loc_id:nw.date+"|"+nw.loc_id;
+        if(eventType==='DELETE')setDA(p=>{const c={...p};delete c[key];return c});
+        else setDA(p=>({...p,[key]:{fieldCrew:nw.field_crew||[],concessions:nw.concessions||[]}}));
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'published_weeks'},({eventType,new:nw,old})=>{
+        if(eventType==='DELETE')setPub(p=>{const c=new Set(p);c.delete(old.week_key);return c});
+        else setPub(p=>{const c=new Set(p);c.add(nw.week_key);return c});
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'rsvps'},({eventType,new:nw,old})=>{
+        const key=eventType==='DELETE'?old.worker_id+"_"+old.date+"_"+old.loc_id:nw.worker_id+"_"+nw.date+"_"+nw.loc_id;
+        if(eventType==='DELETE')setRsvp(p=>{const c={...p};delete c[key];return c});
+        else setRsvp(p=>({...p,[key]:nw.status}));
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'requests'},({eventType,new:nw,old})=>{
+        if(eventType==='DELETE')setRequests(p=>p.filter(x=>x.id!==old.id));
+        else setRequests(p=>{const r=rowToReq(nw);const i=p.findIndex(x=>x.id===r.id);if(i===-1)return[r,...p];const c=[...p];c[i]=r;return c});
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'notifications'},({eventType,new:nw,old})=>{
+        if(eventType==='DELETE')setNotifs(p=>p.filter(x=>x.id!==old.id));
+        else setNotifs(p=>{const n=rowToNotif(nw);const i=p.findIndex(x=>x.id===n.id);if(i===-1)return[n,...p];const c=[...p];c[i]=n;return c});
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'dragger_overrides'},({eventType,new:nw,old})=>{
+        const key=eventType==='DELETE'?old.date+"|"+old.loc_id:nw.date+"|"+nw.loc_id;
+        if(eventType==='DELETE')setDraggerOverrides(p=>{const c={...p};delete c[key];return c});
+        else setDraggerOverrides(p=>({...p,[key]:nw.worker_id}));
+      })
+      .subscribe();
+
+    return()=>{sb.removeChannel(ch)};
+  },[]);
+
   const showToast=(msg,type)=>{setToast({msg,type:type||"info"});setTimeout(()=>setToast(null),3000)};
+  const pushNotifs=arr=>{swrite(sb.from('notifications').insert(arr.map(n=>({id:n.id,worker_id:n.workerId,msg:n.msg,time:n.time,read:n.read,type:n.type}))))};
   const conf=useMemo(()=>detConf(games,workers,da),[games,workers,da]);
-  const runAuto=()=>{const r=autoSched(games,workers,da);setGames(r.games);setDA(r.da);showToast("Auto-schedule complete","s")};
-  const swapUmps=(aGid,aSlot,bGid,bSlot)=>{setGames(p=>{const wA=p.find(g=>g.id===aGid)?.[aSlot],wB=p.find(g=>g.id===bGid)?.[bSlot];return p.map(g=>{if(g.id===aGid)return{...g,[aSlot]:wB};if(g.id===bGid)return{...g,[bSlot]:wA};return g})});showToast("Umpires swapped","s")};
+
+  const runAuto=()=>{
+    const r=autoSched(games,workers,da);
+    setGames(r.games);setDA(r.da);
+    swrite(sb.from('games').upsert(r.games.map(g=>({id:g.id,loc_id:g.locId,field:g.field,division:g.division,date:g.date,time:g.time,home:g.home,away:g.away,status:g.status,ump1:g.ump1===NONE?null:g.ump1,ump2:g.ump2===NONE?null:g.ump2}))));
+    swrite(sb.from('day_assignments').upsert(Object.entries(r.da).map(([k,v])=>{const[date,locId]=k.split("|");return{date,loc_id:locId,field_crew:v.fieldCrew||[],concessions:v.concessions||[]}})));
+    showToast("Auto-schedule complete","s");
+  };
+
+  const swapUmps=(aGid,aSlot,bGid,bSlot)=>{
+    const wA=games.find(g=>g.id===aGid)?.[aSlot],wB=games.find(g=>g.id===bGid)?.[bSlot];
+    setGames(p=>p.map(g=>{if(g.id===aGid)return{...g,[aSlot]:wB};if(g.id===bGid)return{...g,[bSlot]:wA};return g}));
+    swrite(sb.from('games').update({[aSlot]:wB===NONE?null:wB}).eq('id',aGid));
+    swrite(sb.from('games').update({[bSlot]:wA===NONE?null:wA}).eq('id',bGid));
+    showToast("Umpires swapped","s");
+  };
+
   const isPub=date=>pub.has(wkKey(date));
   const pubWeek=ws=>{
     setPub(p=>{const n=new Set(p);n.add(ws);return n});
+    swrite(sb.from('published_weeks').upsert({week_key:ws}));
     const aff=new Set();
     games.filter(g=>wkKey(g.date)===ws).forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE)aff.add(u)})});
     Object.entries(da).filter(([k])=>wkKey(k.split("|")[0])===ws).forEach(([,v])=>{(v.fieldCrew||[]).forEach(u=>aff.add(u));(v.concessions||[]).forEach(u=>aff.add(u))});
-    setNotifs(p=>[...[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"Schedule published for week of "+ws+" — check your shifts.",time:"Just now",read:false,type:"info"})),...p]);
+    const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"Schedule published for week of "+ws+" — check your shifts.",time:"Just now",read:false,type:"info"}));
+    setNotifs(p=>[...n,...p]);pushNotifs(n);
     showToast("Week published — "+aff.size+" workers notified","s");
   };
-  const unpubWeek=ws=>{setPub(p=>{const n=new Set(p);n.delete(ws);return n});showToast("Moved back to draft")};
+  const unpubWeek=ws=>{
+    setPub(p=>{const n=new Set(p);n.delete(ws);return n});
+    swrite(sb.from('published_weeks').delete().eq('week_key',ws));
+    showToast("Moved back to draft");
+  };
 
   // RSVP — fires manager notification on decline, with shift detail and available replacements
   const setRsvpStatus=(wId,date,locId,status)=>{
     setRsvp(p=>({...p,[rsvpKey(wId,date,locId)]:status}));
+    swrite(sb.from('rsvps').upsert({worker_id:wId,date,loc_id:locId,status}));
     if(status==="declined"){
       const w=workers.find(x=>x.id===wId),loc=locs.find(l=>l.id===locId);
       const game=games.find(g=>g.date===date&&g.locId===locId&&(g.ump1===wId||g.ump2===wId));
@@ -40,7 +148,6 @@ function App(){
       } else {
         what=rl(w?.role||"field")+" shift";
       }
-      // Find same-role workers available that day who aren't already assigned anywhere
       const replacements=workers.filter(w2=>{
         if(w2.role!==w?.role||w2.id===wId)return false;
         if(!wa(w2,date))return false;
@@ -50,58 +157,95 @@ function App(){
         return!Object.entries(da).some(([k,v])=>k.split("|")[0]===date&&((v.fieldCrew||[]).includes(w2.id)||(v.concessions||[]).includes(w2.id)));
       });
       const replText=replacements.length?"Available to cover: "+replacements.map(r=>r.name).join(", "):"No one else appears available that day.";
-      setNotifs(p=>[{id:Date.now(),workerId:0,msg:"⚠ "+( w?.name||"A worker")+" declined "+what+" on "+date+" at "+(loc?.name||locId)+". "+replText,time:"Just now",read:false,type:"warn"},...p]);
+      const n=[{id:Date.now(),workerId:0,msg:"⚠ "+( w?.name||"A worker")+" declined "+what+" on "+date+" at "+(loc?.name||locId)+". "+replText,time:"Just now",read:false,type:"warn"}];
+      setNotifs(p=>[...n,...p]);pushNotifs(n);
     }
     showToast(status==="confirmed"?"Confirmed!":"Marked can't make it — manager notified",status==="confirmed"?"s":"w");
   };
   const getRsvp=(wId,date,locId)=>rsvp[rsvpKey(wId,date,locId)]||null;
 
-  const addGame=g=>{setGames(p=>[...p,{...g,id:Date.now(),status:"scheduled",ump1:NONE,ump2:NONE}]);showToast("Game added","s");setModal(null)};
-  const editGame=g=>{setGames(p=>p.map(x=>x.id===g.id?{...x,...g}:x));showToast("Updated","s");setModal(null)};
-  const delGame=id=>{setGames(p=>p.filter(x=>x.id!==id));showToast("Removed");setModal(null)};
-  const setGS=(id,s)=>setGames(p=>p.map(g=>g.id===id?{...g,status:s}:g));
-  const setUmp=(gid,slot,wId)=>setGames(p=>p.map(g=>g.id===gid?{...g,[slot]:wId}:g));
+  const addGame=g=>{
+    const ng={...g,id:Date.now(),status:"scheduled",ump1:NONE,ump2:NONE};
+    setGames(p=>[...p,ng]);
+    swrite(sb.from('games').insert({id:ng.id,loc_id:ng.locId,field:ng.field,division:ng.division,date:ng.date,time:ng.time,home:ng.home,away:ng.away,status:ng.status,ump1:null,ump2:null}));
+    showToast("Game added","s");setModal(null);
+  };
+  const editGame=g=>{
+    setGames(p=>p.map(x=>x.id===g.id?{...x,...g}:x));
+    swrite(sb.from('games').update({loc_id:g.locId,field:g.field,division:g.division,date:g.date,time:g.time,home:g.home,away:g.away,status:g.status}).eq('id',g.id));
+    showToast("Updated","s");setModal(null);
+  };
+  const delGame=id=>{
+    setGames(p=>p.filter(x=>x.id!==id));
+    swrite(sb.from('games').delete().eq('id',id));
+    showToast("Removed");setModal(null);
+  };
+  const setGS=(id,s)=>{
+    setGames(p=>p.map(g=>g.id===id?{...g,status:s}:g));
+    swrite(sb.from('games').update({status:s}).eq('id',id));
+  };
+  const setUmp=(gid,slot,wId)=>{
+    setGames(p=>p.map(g=>g.id===gid?{...g,[slot]:wId}:g));
+    swrite(sb.from('games').update({[slot]:wId===NONE?null:wId}).eq('id',gid));
+  };
   const rainout=(date,locId)=>{
     setGames(p=>p.map(g=>g.date===date&&g.locId===locId?{...g,status:"cancelled"}:g));
+    swrite(sb.from('games').update({status:'cancelled'}).eq('date',date).eq('loc_id',locId));
     const aff=new Set();
     games.filter(g=>g.date===date&&g.locId===locId).forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE)aff.add(u)})});
     const loc=locs.find(l=>l.id===locId),d2=da[dk(date,locId)]||{};
     (d2.fieldCrew||[]).forEach(u=>aff.add(u));(d2.concessions||[]).forEach(u=>aff.add(u));
-    setNotifs(p=>[...[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"RAINOUT: "+date+" at "+(loc?.name||locId)+" — all games cancelled.",time:"Just now",read:false,type:"warn"})),...p]);
+    const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"RAINOUT: "+date+" at "+(loc?.name||locId)+" — all games cancelled.",time:"Just now",read:false,type:"warn"}));
+    setNotifs(p=>[...n,...p]);pushNotifs(n);
     showToast("Rainout — "+aff.size+" workers notified","w");setModal(null);
   };
-  const updDA=(date,locId,role,arr)=>{const k=dk(date,locId);setDA(p=>({...p,[k]:{...(p[k]||{fieldCrew:[],concessions:[]}),[role]:arr}}))};
+  const updDA=(date,locId,role,arr)=>{
+    const k=dk(date,locId);
+    setDA(p=>({...p,[k]:{...(p[k]||{fieldCrew:[],concessions:[]}),[role]:arr}}));
+    swrite(sb.from('day_assignments').upsert({date,loc_id:locId,[role==='fieldCrew'?'field_crew':'concessions']:arr}));
+  };
 
   // Send an in-app reminder notification to every worker scheduled on a given date
   const sendReminders=(date)=>{
     const aff=new Set();
     games.filter(g=>g.date===date&&g.status==="scheduled").forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE)aff.add(u)})});
     Object.entries(da).filter(([k])=>k.split("|")[0]===date).forEach(([,v])=>{(v.fieldCrew||[]).forEach(u=>aff.add(u));(v.concessions||[]).forEach(u=>aff.add(u))});
-    setNotifs(p=>[...[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"🔔 Reminder: you're scheduled on "+date+" — check My Shifts for details.",time:"Just now",read:false,type:"info"})),...p]);
+    const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"🔔 Reminder: you're scheduled on "+date+" — check My Shifts for details.",time:"Just now",read:false,type:"info"}));
+    setNotifs(p=>[...n,...p]);pushNotifs(n);
     showToast(aff.size>0?"Reminders sent to "+aff.size+" worker"+(aff.size>1?"s":""):"No one scheduled that day",aff.size>0?"s":"info");
   };
 
   // Update a worker's years of experience
-  const updYears=(wId,years)=>{setWorkers(p=>p.map(w=>w.id===wId?{...w,yearsExp:Number(years)}:w));showToast("Experience updated","s")};
+  const updYears=(wId,years)=>{
+    setWorkers(p=>p.map(w=>w.id===wId?{...w,yearsExp:Number(years)}:w));
+    swrite(sb.from('workers').update({years_exp:Number(years)}).eq('id',wId));
+    showToast("Experience updated","s");
+  };
 
   // Manually override the dragger for a given date+location
   const setDraggerOverride=(date,locId,wId)=>{
     const k=dk(date,locId);
     setDraggerOverrides(p=>({...p,[k]:wId}));
+    if(wId==null)swrite(sb.from('dragger_overrides').delete().eq('date',date).eq('loc_id',locId));
+    else swrite(sb.from('dragger_overrides').upsert({date,loc_id:locId,worker_id:wId}));
     showToast("Dragger updated","s");
   };
 
   // Offer up a shift — creates a shift_offer request visible to same-role workers
   const offerShift=(wId,date,locId,role,label)=>{
-    setRequests(p=>[{id:Date.now(),type:"shift_offer",workerId:wId,date,locId,role,label,claimedBy:null,status:"pending",created:new Date().toISOString().slice(0,10)},...p]);
+    const nr={id:Date.now(),type:"shift_offer",workerId:wId,date,locId,role,label,claimedBy:null,status:"pending",created:new Date().toISOString().slice(0,10)};
+    setRequests(p=>[nr,...p]);
+    swrite(sb.from('requests').insert({id:nr.id,type:nr.type,worker_id:nr.workerId,date:nr.date,loc_id:nr.locId,role:nr.role,label:nr.label,claimed_by:null,status:nr.status,created:nr.created}));
     showToast("Shift offered up — teammates can now claim it");
   };
 
   // Claim an offered shift — manager sees it in requests and approves/denies
   const claimShift=(reqId,claimerId)=>{
     setRequests(p=>p.map(r=>r.id===reqId?{...r,claimedBy:claimerId,status:"pending_approval"}:r));
+    swrite(sb.from('requests').update({claimed_by:claimerId,status:'pending_approval'}).eq('id',reqId));
     const req=requests.find(r=>r.id===reqId),claimer=workers.find(w=>w.id===claimerId),offerer=workers.find(w=>w.id===req?.workerId),loc=locs.find(l=>l.id===req?.locId);
-    setNotifs(p=>[{id:Date.now(),workerId:0,msg:"🔄 "+claimer?.name+" wants to take "+offerer?.name+"'s shift on "+req?.date+" at "+(loc?.name||"?")+" — approve in Requests.",time:"Just now",read:false,type:"info"},...p]);
+    const n=[{id:Date.now(),workerId:0,msg:"🔄 "+claimer?.name+" wants to take "+offerer?.name+"'s shift on "+req?.date+" at "+(loc?.name||"?")+" — approve in Requests.",time:"Just now",read:false,type:"info"}];
+    setNotifs(p=>[...n,...p]);pushNotifs(n);
     showToast("Claim submitted — waiting for manager approval");
   };
 
@@ -116,36 +260,65 @@ function App(){
           if(g.ump2===req.workerId)return{...g,ump2:req.claimedBy};
           return g;
         }));
+        const gMatch=games.find(g=>g.date===req.date&&g.locId===req.locId&&(g.ump1===req.workerId||g.ump2===req.workerId));
+        if(gMatch){const slot=gMatch.ump1===req.workerId?'ump1':'ump2';swrite(sb.from('games').update({[slot]:req.claimedBy}).eq('id',gMatch.id))}
       } else {
         const k=dk(req.date,req.locId);
-        setDA(p=>{const d={...(p[k]||{fieldCrew:[],concessions:[]})};const roleKey=req.role==="field"?"fieldCrew":"concessions";d[roleKey]=(d[roleKey]||[]).map(id=>id===req.workerId?req.claimedBy:id);return{...p,[k]:d}});
+        let newArr;
+        setDA(p=>{const d={...(p[k]||{fieldCrew:[],concessions:[]})};const roleKey=req.role==="field"?"fieldCrew":"concessions";newArr=(d[roleKey]||[]).map(id=>id===req.workerId?req.claimedBy:id);d[roleKey]=newArr;return{...p,[k]:d}});
+        const dbRoleKey=req.role==="field"?"field_crew":"concessions";
+        swrite(sb.from('day_assignments').upsert({date:req.date,loc_id:req.locId,[dbRoleKey]:newArr}));
       }
       const claimer=workers.find(w=>w.id===req.claimedBy),loc=locs.find(l=>l.id===req.locId);
-      setNotifs(p=>[
+      const n=[
         {id:Date.now(),  workerId:req.claimedBy,msg:"✅ Your claim for "+req.date+" at "+(loc?.name||"?")+" was approved — you're on the schedule.",time:"Just now",read:false,type:"success"},
-        {id:Date.now()+1,workerId:req.workerId, msg:"✅ "+claimer?.name+" is covering your shift on "+req.date+" at "+(loc?.name||"?")+".",time:"Just now",read:false,type:"success"},
-        ...p
-      ]);
+        {id:Date.now()+1,workerId:req.workerId, msg:"✅ "+claimer?.name+" is covering your shift on "+req.date+" at "+(loc?.name||"?")+".",time:"Just now",read:false,type:"success"}
+      ];
+      setNotifs(p=>[...n,...p]);pushNotifs(n);
     } else {
       if(req?.type==="shift_offer"&&action==="denied"&&req.claimedBy){
-        const claimer=workers.find(w=>w.id===req.claimedBy),loc=locs.find(l=>l.id===req.locId);
-        setNotifs(p=>[{id:Date.now(),workerId:req.claimedBy,msg:"❌ Your claim for "+req.date+" at "+(loc?.name||"?")+" was denied.",time:"Just now",read:false,type:"warn"},...p]);
+        const loc=locs.find(l=>l.id===req.locId);
+        const n=[{id:Date.now(),workerId:req.claimedBy,msg:"❌ Your claim for "+req.date+" at "+(loc?.name||"?")+" was denied.",time:"Just now",read:false,type:"warn"}];
+        setNotifs(p=>[...n,...p]);pushNotifs(n);
       }
     }
     setRequests(p=>p.map(r=>r.id===id?{...r,status:action==="approved"?"approved":"denied"}:r));
+    swrite(sb.from('requests').update({status:action==="approved"?"approved":"denied"}).eq('id',id));
     showToast("Request "+action,action==="approved"?"s":"info");
   };
 
-  const subReq=req=>{setRequests(p=>[{...req,id:Date.now(),status:"pending",created:new Date().toISOString().slice(0,10)},...p]);showToast("Request submitted");setModal(null)};
-  const addLoc=loc=>{setLocs(p=>[...p,{...loc,id:Date.now().toString()}]);showToast("Location added","s");setModal(null)};
-  const addField=(lid,f)=>{setLocs(p=>p.map(l=>l.id===lid?{...l,fields:[...l.fields,f]}:l));showToast("Field added");setModal(null)};
-  const updAvail=(wId,avail)=>{setWorkers(p=>p.map(w=>w.id===wId?{...w,avail}:w));showToast("Saved","s")};
+  const subReq=req=>{
+    const nr={...req,id:Date.now(),status:"pending",created:new Date().toISOString().slice(0,10)};
+    setRequests(p=>[nr,...p]);
+    swrite(sb.from('requests').insert({id:nr.id,type:nr.type,worker_id:nr.workerId,date:nr.date||null,date_start:nr.dateStart||null,date_end:nr.dateEnd||null,loc_id:nr.locId||null,role:nr.role||null,label:nr.label||null,reason:nr.reason||null,claimed_by:nr.claimedBy||null,status:nr.status,created:nr.created}));
+    showToast("Request submitted");setModal(null);
+  };
+  const addLoc=loc=>{
+    const nl={...loc,id:Date.now().toString()};
+    setLocs(p=>[...p,nl]);
+    swrite(sb.from('locations').insert({id:nl.id,name:nl.name,fields:nl.fields}));
+    showToast("Location added","s");setModal(null);
+  };
+  const addField=(lid,f)=>{
+    let newFields;
+    setLocs(p=>p.map(l=>{if(l.id!==lid)return l;newFields=[...l.fields,f];return{...l,fields:newFields}}));
+    swrite(sb.from('locations').update({fields:newFields}).eq('id',lid));
+    showToast("Field added");setModal(null);
+  };
+  const updAvail=(wId,avail)=>{
+    setWorkers(p=>p.map(w=>w.id===wId?{...w,avail}:w));
+    swrite(sb.from('workers').update({avail}).eq('id',wId));
+    showToast("Saved","s");
+  };
   const importCSV=csv=>{
     const lines=csv.trim().split("\n"),ng=[];
     for(let i=1;i<lines.length;i++){const c=lines[i].split(",").map(x=>x.replace(/"/g,"").trim());if(c.length<5)continue;ng.push({id:Date.now()+i,locId:c[0].toLowerCase().includes("spring")?"sc":"mv",field:c[1]||"Field 1",division:normDiv(c[2]),date:c[3],time:c[4]||"9:00 AM",home:c[6]||"",away:c[5]||"",status:"scheduled",ump1:NONE,ump2:NONE})}
-    setGames(p=>[...p,...ng]);showToast("Imported "+ng.length+" games","s");setModal(null);
+    setGames(p=>[...p,...ng]);
+    swrite(sb.from('games').insert(ng.map(g=>({id:g.id,loc_id:g.locId,field:g.field,division:g.division,date:g.date,time:g.time,home:g.home,away:g.away,status:g.status,ump1:null,ump2:null}))));
+    showToast("Imported "+ng.length+" games","s");setModal(null);
   };
 
+  if(!loaded)return R("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#9BA3BF",fontSize:14}},"Loading FieldSync…");
   if(!user)return R(Login,{onLogin:u=>{setUser(u);setView(u.role==="overseer"?"today":"worker_home")}});
   const myNotifs=user.role==="overseer"?notifs:notifs.filter(n=>n.workerId===user.id||n.workerId===0&&false);
   const unread=myNotifs.filter(n=>!n.read).length,pendingR=requests.filter(r=>r.status==="pending"||r.status==="pending_approval").length;
