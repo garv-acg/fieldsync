@@ -1,8 +1,10 @@
-function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf}){
+function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf,pub,rsvp,runAuto}){
   const today=new Date().toISOString().slice(0,10);
   const tmrw=new Date(Date.now()+86400000).toISOString().slice(0,10);
   const todayGames=games.filter(g=>g.date===today&&g.status!=="cancelled");
   const conflicted=new Set(conf.filter(c=>c.type==="crew"&&c.date===today).map(c=>c.worker?.id));
+  const noUmp=games.filter(g=>g.status==="scheduled"&&g.ump1===NONE).length;
+  const confirmed=Object.values(rsvp).filter(v=>v==="confirmed").length;
 
   const chip=(status,label)=>{
     const sty=status==="green"?{background:"#13311F",color:"#7DDBA8",border:"1px solid #3DBA7B"}
@@ -16,7 +18,22 @@ function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf
   return R("div",null,
     R("div",{className:"ph"},
       R("div",null,R("h2",null,"Today"),R("p",null,new Date(today+"T12:00:00").toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"})+" — live staffing status")),
-      R("button",{className:"btn btn-blue",onClick:()=>sendReminders(tmrw)},"🔔 Send tomorrow reminders")
+      R("div",{style:{display:"flex",gap:8}},
+        R("button",{className:"btn",onClick:()=>setModal({type:"import"})},"Import CSV"),
+        R("button",{className:"btn btn-green",onClick:runAuto},"⚡ Auto-schedule"),
+        R("button",{className:"btn btn-blue",onClick:()=>setModal({type:"add_game"})},"+  Add game"),
+        R("button",{className:"btn btn-blue",onClick:()=>sendReminders(tmrw)},"🔔 Tomorrow reminders")
+      )
+    ),
+    conf.length>0&&R("div",{className:"conf-banner"},
+      R("div",{className:"conf-banner-title"},"⚠ "+conf.length+" umpire conflict"+(conf.length>1?"s":"")+" detected"),
+      conf.map((c,i)=>R("div",{key:i,style:{fontSize:12,marginTop:2}},c.worker?.name+" is double-booked on "+c.games[0].date+" at "+c.games[0].time+" ("+c.games.map(g=>g.division).join(" & ")+")"))
+    ),
+    R("div",{className:"metrics"},
+      R("div",{className:"metric"},R("div",{className:"metric-label"},"Games"),R("div",{className:"metric-val"},games.length),R("div",{className:"metric-sub"},games.filter(g=>g.status==="scheduled").length+" scheduled")),
+      R("div",{className:"metric"},R("div",{className:"metric-label"},"Missing ump"),R("div",{className:"metric-val",style:{color:noUmp>0?"#F0C060":"#7DDBA8"}},noUmp===0?"✓":noUmp),R("div",{className:"metric-sub"},noUmp===0?"All covered":"Need assignment")),
+      R("div",{className:"metric"},R("div",{className:"metric-label"},"Conflicts"),R("div",{className:"metric-val",style:{color:conf.length>0?"#F09090":"#7DDBA8"}},conf.length),R("div",{className:"metric-sub"},"Double-bookings")),
+      R("div",{className:"metric"},R("div",{className:"metric-label"},"RSVPs"),R("div",{className:"metric-val",style:{color:"#7DDBA8"}},confirmed),R("div",{className:"metric-sub"},"Workers confirmed"))
     ),
     todayGames.length===0
       ? R("div",{className:"card"},R("div",{className:"empty"},"No games scheduled for today."))

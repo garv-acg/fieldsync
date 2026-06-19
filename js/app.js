@@ -21,7 +21,7 @@ function rowToNotif(r){return{id:r.id,workerId:r.worker_id,msg:r.msg,time:r.time
 function swrite(promise){promise.then(({error})=>{if(error)console.error("Supabase write failed:",error)})}
 
 function App(){
-  const[user,setUser]=useState(null),[view,setView]=useState("dashboard"),[locs,setLocs]=useState([]),[workers,setWorkers]=useState([]),[games,setGames]=useState([]),[da,setDA]=useState({}),[pub,setPub]=useState(new Set()),[rsvp,setRsvp]=useState({}),[requests,setRequests]=useState([]),[notifs,setNotifs]=useState([]),[modal,setModal]=useState(null),[toast,setToast]=useState(null),[draggerOverrides,setDraggerOverrides]=useState({}),[loaded,setLoaded]=useState(false);
+  const[user,setUser]=useState(null),[view,setView]=useState("today"),[locs,setLocs]=useState([]),[workers,setWorkers]=useState([]),[games,setGames]=useState([]),[da,setDA]=useState({}),[pub,setPub]=useState(new Set()),[rsvp,setRsvp]=useState({}),[requests,setRequests]=useState([]),[notifs,setNotifs]=useState([]),[modal,setModal]=useState(null),[toast,setToast]=useState(null),[draggerOverrides,setDraggerOverrides]=useState({}),[loaded,setLoaded]=useState(false);
 
   // ── Initial load from Supabase + realtime subscriptions for multi-device sync ──
   React.useEffect(()=>{
@@ -335,7 +335,7 @@ function App(){
   if(!user)return R(Login,{onLogin:u=>{setUser(u);setView(u.role==="overseer"?"today":"worker_home")}});
   const myNotifs=user.role==="overseer"?notifs:notifs.filter(n=>n.workerId===user.id||n.workerId===0&&false);
   const unread=myNotifs.filter(n=>!n.read).length,pendingR=requests.filter(r=>r.status==="pending"||r.status==="pending_approval").length;
-  const adminNav=[{id:"today",label:"Today"},{id:"dashboard",label:"Dashboard"},{id:"schedule",label:"Schedule"},{id:"games",label:"Games"},{id:"umpires",label:"Umpires",badge:conf.length},{id:"workers",label:"Workers"},{id:"requests",label:"Requests",badge:pendingR},{id:"timeoff",label:"Time Off"},{id:"locations",label:"Locations"},{id:"reports",label:"Reports"},{id:"notifications",label:"Notifications",badge:unread}];
+  const adminNav=[{id:"today",label:"Today"},{id:"schedule",label:"Schedule"},{id:"staff",label:"Staff",badge:conf.length},{id:"requests",label:"Requests",badge:pendingR},{id:"reports",label:"Reports"},{id:"settings",label:"Settings"}];
   const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"notifications",label:"Notifications",badge:unread}];
   const nav=user.role==="overseer"?adminNav:workerNav;
   const sp={user,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders};
@@ -343,8 +343,8 @@ function App(){
     R("div",{className:"topbar"},
       R("div",{className:"logo"},"Field",R("span",null,"Sync")),
       R("div",{style:{display:"flex",alignItems:"center",gap:12}},
-        conf.length>0&&R("span",{style:{background:"#3D1A1A",color:"#F09090",border:"1px solid #E05555",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"},onClick:()=>setView("umpires")},"⚠ "+conf.length+" conflict"+(conf.length>1?"s":"")),
-        unread>0&&R("span",{className:"badge b-amber"},unread+" new"),
+        conf.length>0&&R("span",{style:{background:"#3D1A1A",color:"#F09090",border:"1px solid #E05555",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"},onClick:()=>setView("staff")},"⚠ "+conf.length+" conflict"+(conf.length>1?"s":"")),
+        R("span",{style:{position:"relative",cursor:"pointer",fontSize:18,lineHeight:1},onClick:()=>setView("notifications")},"🔔",unread>0&&R("span",{style:{position:"absolute",top:-4,right:-6,background:"#E05555",color:"#fff",borderRadius:"50%",fontSize:9,fontWeight:700,minWidth:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}},unread)),
         R("span",{className:"badge "+(user.role==="overseer"?"b-blue":"b-green")},user.role==="overseer"?"Admin":rl(user.role)),
         R("span",{style:{fontSize:13,fontWeight:600}},user.name),
         R("button",{className:"btn btn-sm",onClick:()=>setUser(null)},"Sign out")
@@ -353,12 +353,16 @@ function App(){
     R("div",{className:"layout"},
       R("div",{className:"sidebar"},
         nav.map(item=>R("div",{key:item.id,className:"nav-item"+(view===item.id?" active":""),onClick:()=>setView(item.id)},item.label,item.badge>0&&R("span",{className:"nav-badge"},item.badge))),
-        R("div",{className:"nav-bottom"},R("div",{className:"nav-item",onClick:()=>exportCSV(games,locs,da,workers)},"↓ Export CSV"))
+        R("div",{className:"nav-bottom"},R("div",{className:"nav-item",style:{fontSize:12,color:"#6B7394"}},user.name))
       ),
       R("div",{className:"content"},
-        view==="today"&&R(TodayView,sp),view==="dashboard"&&R(DashView,sp),view==="schedule"&&R(SchedView,sp),view==="games"&&R(GamesView,sp),
-        view==="umpires"&&R(UmpsView,sp),view==="workers"&&R(WorkersView,sp),view==="requests"&&R(ReqsView,sp),view==="timeoff"&&R(TimeOffView,sp),
-        view==="locations"&&R(LocsView,sp),view==="reports"&&R(ReportsView,sp),view==="notifications"&&R(NotifsView,sp),
+        view==="today"&&R(TodayView,sp),
+        view==="schedule"&&R(SchedGamesView,sp),
+        view==="staff"&&R(StaffView,sp),
+        view==="requests"&&R(ReqsView,sp),
+        view==="reports"&&R(ReportsView,sp),
+        view==="settings"&&R(LocsView,sp),
+        view==="notifications"&&R(NotifsView,sp),
         view==="worker_home"&&R(WHome,sp),view==="my_shifts"&&R(MyShifts,sp),view==="my_requests"&&R(MyReqs,sp),view==="availability"&&R(AvailView,sp)
       )
     ),
