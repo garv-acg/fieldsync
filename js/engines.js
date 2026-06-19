@@ -23,9 +23,9 @@ function autoSched(games,workers,da,requests){
     });
   };
 
-  const umps=workers.filter(w=>w.role==="umpire");
-  const fw=workers.filter(w=>w.role==="field");
-  const cw=workers.filter(w=>w.role==="concessions");
+  const umps=workers.filter(w=>hasRole(w,"umpire"));
+  const fw=workers.filter(w=>hasRole(w,"field"));
+  const cw=workers.filter(w=>hasRole(w,"concessions"));
   const uu={};
   ug.forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE){if(!uu[u])uu[u]=new Set();uu[u].add(g.date)}})});
 

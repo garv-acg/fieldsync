@@ -12,6 +12,7 @@ const rb=r=>r==="umpire"?"b-purple":r==="field"?"b-green":"b-amber";
 const isDual=d=>DUAL.includes(d);
 const dk=(date,locId)=>date+"|"+locId;
 const wkKey=date=>{const d=new Date(date+"T12:00:00"),m=new Date(d);m.setDate(d.getDate()-d.getDay());return m.toISOString().slice(0,10)};
+const hasRole=(w,role)=>(w.roles&&w.roles.length?w.roles:[w.role]).includes(role);
 const wa=(w,date,requests)=>{
   if(!w.avail.includes(WDAYS[new Date(date+"T12:00:00").getDay()]))return false;
   if(!requests)return true;

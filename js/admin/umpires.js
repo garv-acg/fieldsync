@@ -1,6 +1,6 @@
 function UmpsView({games,workers,locs,conf,setUmp,swapUmps}){
   const[tab,setTab]=useState("board"),[lf,setLf]=useState("all");
-  const umps=workers.filter(w=>w.role==="umpire");
+  const umps=workers.filter(w=>hasRole(w,"umpire"));
   const allActive=games.filter(g=>g.status!=="cancelled");
   const activeGames=allActive.filter(g=>lf==="all"||g.locId===lf).sort((a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.time));
   const dates=[...new Set(activeGames.map(g=>g.date))].sort();

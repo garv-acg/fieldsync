@@ -1,6 +1,6 @@
 function UmpSlots({game,workers,setUmp}){
   const d2=isDual(game.division);
-  const opts=[{v:NONE,l:"None"},...workers.filter(w=>w.role==="umpire").map(w=>({v:w.id,l:w.name}))];
+  const opts=[{v:NONE,l:"None"},...workers.filter(w=>hasRole(w,"umpire")).map(w=>({v:w.id,l:w.name}))];
   return R("div",{style:{marginTop:8}},
     R("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:4}},
       R("span",{style:{fontSize:11,color:"#6B7394",fontWeight:700,width:44}},"UMP 1"),
@@ -14,7 +14,7 @@ function UmpSlots({game,workers,setUmp}){
 }
 function CrewPanel({date,locId,da,workers,updDA}){
   const k=dk(date,locId),d=da[k]||{fieldCrew:[],concessions:[]};
-  const fw=workers.filter(w=>w.role==="field"),cw=workers.filter(w=>w.role==="concessions");
+  const fw=workers.filter(w=>hasRole(w,"field")),cw=workers.filter(w=>hasRole(w,"concessions"));
   const tog=(role,wId)=>{
     const curr=[...((role==="fieldCrew"?d.fieldCrew:d.concessions)||[])];
     const next=curr.includes(wId)?curr.filter(x=>x!==wId):[...curr,wId];
