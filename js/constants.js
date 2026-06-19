@@ -29,7 +29,7 @@ const wa=(w,date,requests,role)=>{
 const rsvpKey=(wId,date,locId)=>`${wId}_${date}_${locId}`;
 const normDiv=raw=>{if(!raw)return"AA";if(raw.toLowerCase().includes("9-11")||raw.toLowerCase().includes("district"))return"Majors";return{"Minors AA":"AA","Minors AAA":"AAA","Minors A":"A","Teeball":"Tee Ball","T-Ball":"Tee Ball","8U":"Softball 8U","10U":"Softball 10U","12U":"Softball 12U"}[raw]||raw};
 const PAY_DEFAULTS={umpireRate:45,fieldRate:34,concessionsRate:17};
-const LOCS=[{id:"sc",name:"Spring Creek",fields:["Field 1","Field 2","Field 3"]},{id:"mv",name:"Mission Viejo",fields:["Field 1","Field 2","Field 3","Field 4"]}];
+const LOCS=[{id:"sc",name:"Spring Creek",fields:["Field 1","Field 2","Field 3"],hasSnackShack:false},{id:"mv",name:"Mission Viejo",fields:["Field 1","Field 2","Field 3","Field 4"],hasSnackShack:true}];
 const WORKERS=[
   {id:1,name:"Jordan Lee",role:"umpire",roles:["umpire","field","concessions"],email:"jordan@crew.com",avail:["Mon","Wed","Fri","Sat","Sun"],password:"ump"},
   {id:2,name:"Sam Rivera",role:"umpire",email:"sam@crew.com",avail:["Tue","Thu","Sat","Sun"],password:"ump2"},
@@ -54,7 +54,7 @@ const INIT_GAMES=[
   {id:1008,locId:"sc",field:"Field 1",division:"AAA",date:"2026-06-21",time:"10:00 AM",home:"Angels",away:"Bears",status:"scheduled",ump1:1,ump2:2},
   {id:1009,locId:"mv",field:"Field 2",division:"Majors",date:"2026-06-22",time:"1:00 PM",home:"Cardinals",away:"Eagles",status:"scheduled",ump1:1,ump2:3},
 ];
-const INIT_DA={"2026-06-13|sc":{fieldCrew:[1,5,6,7],concessions:[1,9,10]},"2026-06-14|mv":{fieldCrew:[1,6,8],concessions:[10,11]},"2026-06-14|sc":{fieldCrew:[5,7],concessions:[1,9]},"2026-06-21|sc":{fieldCrew:[1,5,6,7],concessions:[1,9,10]},"2026-06-22|mv":{fieldCrew:[1,6,8],concessions:[9,10]}};
+const INIT_DA={"2026-06-13|sc":{fieldCrew:[1,5,6,7],concessions:[]},"2026-06-14|mv":{fieldCrew:[1,6,8],concessions:[10,11]},"2026-06-14|sc":{fieldCrew:[5,7],concessions:[]},"2026-06-21|sc":{fieldCrew:[1,5,6,7],concessions:[]},"2026-06-22|mv":{fieldCrew:[1,6,8],concessions:[9,10]}};
 const INIT_PUB=new Set(["2026-06-08"]);
 const INIT_RSVP={[rsvpKey(1,"2026-06-13","sc")]:"confirmed",[rsvpKey(5,"2026-06-13","sc")]:"confirmed"};
 const INIT_REQUESTS=[{id:201,type:"time_off",workerId:1,dateStart:"2026-06-20",dateEnd:"2026-06-20",reason:"Family event",status:"pending",created:"2026-06-05"}];

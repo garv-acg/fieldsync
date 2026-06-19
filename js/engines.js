@@ -1,4 +1,4 @@
-function autoSched(games,workers,da,requests){
+function autoSched(games,workers,da,requests,locs){
   const nda={...da},ug=games.map(g=>({...g}));
   const reqs=requests||[];
 
@@ -65,13 +65,17 @@ function autoSched(games,workers,da,requests){
       });
       nda[key]={...nda[key],fieldCrew:ex};
     }
-    const ec=nda[key].concessions||[];
-    if(ec.length===0){
-      const avail=cw.filter(u=>wa(u,date,reqs,"concessions")&&(!cu[u.id]||!cu[u.id].has(date)));
-      pickBest(avail,cwShifts).slice(0,3).forEach(u=>{
-        ec.push(u.id);if(!cu[u.id])cu[u.id]=new Set();cu[u.id].add(date);cwShifts[u.id]=(cwShifts[u.id]||0)+1;
-      });
-      nda[key]={...nda[key],concessions:ec};
+    const loc=(locs||[]).find(l=>l.id===locId);
+    const ssOpen=nda[key].snackShackOpen??true;
+    if(loc?.hasSnackShack&&ssOpen){
+      const ec=nda[key].concessions||[];
+      if(ec.length===0){
+        const avail=cw.filter(u=>wa(u,date,reqs,"concessions")&&(!cu[u.id]||!cu[u.id].has(date)));
+        pickBest(avail,cwShifts).slice(0,3).forEach(u=>{
+          ec.push(u.id);if(!cu[u.id])cu[u.id]=new Set();cu[u.id].add(date);cwShifts[u.id]=(cwShifts[u.id]||0)+1;
+        });
+        nda[key]={...nda[key],concessions:ec};
+      }
     }
   });
   return{games:ug,da:nda};

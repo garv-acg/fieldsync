@@ -1,4 +1,4 @@
-function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAuto,setModal,setUmp,updDA,setGS,rainout,getDragger,setDraggerOverride,draggerOverrides,sendReminders}){
+function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAuto,setModal,setUmp,updDA,updSnackShackOpen,setGS,rainout,getDragger,setDraggerOverride,draggerOverrides,sendReminders}){
   const[lf,setLf]=useState("all");
   const dates=[...new Set(games.map(g=>g.date))].sort();
   const byWk={};dates.forEach(d=>{const w=wkKey(d);if(!byWk[w])byWk[w]=[];if(!byWk[w].includes(d))byWk[w].push(d)});
@@ -70,7 +70,7 @@ function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAu
                     )
                   );
                 }),
-                R(CrewPanel,{date,locId:loc.id,da,workers,updDA}),
+                R(CrewPanel,{date,locId:loc.id,da,workers,updDA,updSnackShackOpen,loc}),
                 // Dragger row — most senior field crew, admin can override
                 crew.length>0&&R("div",{style:{display:"flex",alignItems:"center",gap:8,marginTop:6,padding:"6px 10px",background:"#1A1F2E",borderRadius:7,border:"1px solid #2A3050"}},
                   R("span",{style:{fontSize:12,color:"#9BA3BF"}},"🚜 Dragger:"),

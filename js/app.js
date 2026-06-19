@@ -18,7 +18,7 @@ function getDragger(date,locId,da,workers,overrides,requests){
 
 // ── Supabase row <-> app shape converters ──────────────────────────
 function rowToWorker(r){return{id:r.id,name:r.name,email:r.email,password:r.password,role:r.role,avail:r.avail||[],availByRole:r.avail_by_role||{},yearsExp:r.years_exp||0,phone:r.phone||"",roles:r.roles||null,payRates:r.pay_rates||{}}}
-function rowToLoc(r){return{id:r.id,name:r.name,fields:r.fields||[]}}
+function rowToLoc(r){const seed=LOCS.find(l=>l.id===r.id);return{id:r.id,name:r.name,fields:r.fields||[],hasSnackShack:seed?.hasSnackShack??false}}
 function rowToGame(r){return{id:r.id,locId:r.loc_id,field:r.field,division:r.division,date:r.date,time:r.time,home:r.home,away:r.away,status:r.status,ump1:r.ump1==null?NONE:r.ump1,ump2:r.ump2==null?NONE:r.ump2}}
 function rowToReq(r){return{id:r.id,type:r.type,workerId:r.worker_id,date:r.date,dateStart:r.date_start,dateEnd:r.date_end,locId:r.loc_id,role:r.role,label:r.label,reason:r.reason,claimedBy:r.claimed_by,status:r.status,created:r.created}}
 function rowToNotif(r){return{id:r.id,workerId:r.worker_id,msg:r.msg,time:r.time,read:r.read,type:r.type}}
@@ -47,7 +47,7 @@ function App(){
       setWorkers((w.data||[]).map(rowToWorker));
       setLocs((l.data||[]).map(rowToLoc));
       setGames((g.data||[]).map(rowToGame));
-      const ndaMap={};(d.data||[]).forEach(row=>{ndaMap[row.date+"|"+row.loc_id]={fieldCrew:row.field_crew||[],concessions:row.concessions||[],concessionsHours:row.concessions_hours||{}}});
+      const ndaMap={};(d.data||[]).forEach(row=>{ndaMap[row.date+"|"+row.loc_id]={fieldCrew:row.field_crew||[],concessions:row.concessions||[],concessionsHours:row.concessions_hours||{},snackShackOpen:row.snack_shack_open??true}});
       setDA(ndaMap);
       setPub(new Set((p.data||[]).map(row=>row.week_key)));
       const rsvpMap={};(r.data||[]).forEach(row=>{rsvpMap[row.worker_id+"_"+row.date+"_"+row.loc_id]=row.status});
@@ -109,7 +109,7 @@ function App(){
   const conf=useMemo(()=>detConf(games,workers,da),[games,workers,da]);
 
   const runAuto=()=>{
-    const r=autoSched(games,workers,da,requests);
+    const r=autoSched(games,workers,da,requests,locs);
     setGames(r.games);setDA(r.da);
     swrite(sb.from('games').upsert(r.games.map(g=>({id:g.id,loc_id:g.locId,field:g.field,division:g.division,date:g.date,time:g.time,home:g.home,away:g.away,status:g.status,ump1:g.ump1===NONE?null:g.ump1,ump2:g.ump2===NONE?null:g.ump2}))));
     swrite(sb.from('day_assignments').upsert(Object.entries(r.da).map(([k,v])=>{const[date,locId]=k.split("|");return{date,loc_id:locId,field_crew:v.fieldCrew||[],concessions:v.concessions||[]}})));
@@ -216,6 +216,11 @@ function App(){
     setDA(p=>{const prev=p[k]||{fieldCrew:[],concessions:[],concessionsHours:{}};const ch={...prev.concessionsHours,[wId]:hours};return{...p,[k]:{...prev,concessionsHours:ch}}});
     const ch={...(da[dk(date,locId)]?.concessionsHours||{}),[wId]:hours};
     swrite(sb.from('day_assignments').upsert({date,loc_id:locId,concessions_hours:ch}));
+  };
+  const updSnackShackOpen=(date,locId,open)=>{
+    const k=dk(date,locId);
+    setDA(p=>({...p,[k]:{...(p[k]||{fieldCrew:[],concessions:[],concessionsHours:{}}),snackShackOpen:open}}));
+    swrite(sb.from('day_assignments').upsert({date,loc_id:locId,snack_shack_open:open}));
   };
   const updPayConfig=cfg=>{const n={...payConfig,...cfg};setPayConfig(n);try{localStorage.setItem('fsPayConfig',JSON.stringify(n))}catch{}};
   const updWorkerRoles=(wId,roles)=>{
@@ -371,7 +376,7 @@ function App(){
   const adminNav=[{id:"today",label:"Today"},{id:"schedule",label:"Schedule"},{id:"staff",label:"Staff",badge:conf.length},{id:"requests",label:"Requests",badge:pendingR},{id:"reports",label:"Reports"},{id:"settings",label:"Settings"}];
   const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"notifications",label:"Notifications",badge:unread}];
   const nav=effectiveUser.role==="overseer"?adminNav:workerNav;
-  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updWorkerRoles,updWorkerPayRate};
+  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updSnackShackOpen,updWorkerRoles,updWorkerPayRate};
   return R("div",{className:"app"},
     R("div",{className:"topbar"},
       R("div",{className:"logo"},"Field",R("span",null,"Sync")),

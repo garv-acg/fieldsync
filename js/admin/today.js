@@ -1,4 +1,4 @@
-function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf,pub,rsvp,runAuto}){
+function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf,pub,rsvp,runAuto,updSnackShackOpen}){
   const today=new Date().toISOString().slice(0,10);
   const tmrw=new Date(Date.now()+86400000).toISOString().slice(0,10);
   const todayGames=games.filter(g=>g.date===today&&g.status!=="cancelled");
@@ -54,7 +54,8 @@ function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf
 
           const d=da[dk(today,loc.id)]||{};
           const fc=(d.fieldCrew||[]).length,fcStatus=fc>=FC?"green":fc===0?"red":"amber";
-          const cc=(d.concessions||[]).length,ccStatus=cc>=3?"green":cc===0?"red":"amber";
+          const ssOpen=d.snackShackOpen??true;
+          const cc=(d.concessions||[]).length,ccStatus=!ssOpen?"amber":cc>=3?"green":cc===0?"red":"amber";
           const draggerId=getDragger(today,loc.id);
           const fcNames=(d.fieldCrew||[]).map(id=>{const w=workers.find(x=>x.id===id);return{id,name:w?.name||id,isDragger:id===draggerId}});
           const ccNames=(d.concessions||[]).map(id=>({id,name:workers.find(x=>x.id===id)?.name||id}));
@@ -62,12 +63,19 @@ function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf
           return R("div",{key:loc.id,className:"card",style:{marginBottom:16}},
             R("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:14}},
               R("span",{style:{fontWeight:800,fontSize:16}},loc.name),
+              loc.hasSnackShack&&R("button",{
+                className:"btn btn-sm",
+                style:ssOpen
+                  ?{background:"#13311F",color:"#7DDBA8",border:"1px solid #3DBA7B"}
+                  :{background:"#3D2E10",color:"#F0C060",border:"1px solid #E0A030"},
+                onClick:()=>updSnackShackOpen(today,loc.id,!ssOpen)
+              },ssOpen?"🍿 Snack shack open":"🚫 Snack shack closed"),
               R("button",{className:"btn btn-sm",style:{marginLeft:"auto",background:"#3D1A1A",color:"#F09090",borderColor:"#E05555"},onClick:()=>setModal({type:"rainout",date:today,locId:loc.id,locName:loc.name})},"⛈ Rainout")
             ),
             R("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}},
               chip(umpStatus,"Umpires "+filledSlots+"/"+totalSlots),
               chip(fcStatus,"Field crew "+fc+"/"+FC),
-              chip(ccStatus,"Snack shack "+cc+"/3")
+              loc.hasSnackShack&&chip(ccStatus,ssOpen?"Snack shack "+cc+"/3":"Snack shack closed")
             ),
             sectionLabel("Games & umpires"),
             lg.map(g=>{
@@ -85,10 +93,14 @@ function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf
             fcNames.length
               ? R("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},fcNames.map(n=>namePill(n.id,(n.isDragger?"🚜 ":"")+n.name,conflicted.has(n.id))))
               : R("div",{style:{fontSize:12,color:"#6B7394"}},"No one assigned yet"),
-            sectionLabel("Snack shack"),
-            ccNames.length
-              ? R("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},ccNames.map(n=>namePill(n.id,n.name,conflicted.has(n.id))))
-              : R("div",{style:{fontSize:12,color:"#6B7394"}},"No one assigned yet")
+            loc.hasSnackShack&&R("div",null,
+              sectionLabel("Snack shack"),
+              !ssOpen
+                ? R("div",{style:{fontSize:12,color:"#F0C060"}},"Closed today")
+                : ccNames.length
+                  ? R("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},ccNames.map(n=>namePill(n.id,n.name,conflicted.has(n.id))))
+                  : R("div",{style:{fontSize:12,color:"#6B7394"}},"No one assigned yet")
+            )
           );
         })
   );

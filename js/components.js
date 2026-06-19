@@ -12,8 +12,9 @@ function UmpSlots({game,workers,setUmp}){
     )
   );
 }
-function CrewPanel({date,locId,da,workers,updDA}){
+function CrewPanel({date,locId,da,workers,updDA,updSnackShackOpen,loc}){
   const k=dk(date,locId),d=da[k]||{fieldCrew:[],concessions:[]};
+  const ssOpen=d.snackShackOpen??true;
   const fw=workers.filter(w=>hasRole(w,"field")),cw=workers.filter(w=>hasRole(w,"concessions"));
   const tog=(role,wId)=>{
     const curr=[...((role==="fieldCrew"?d.fieldCrew:d.concessions)||[])];
@@ -23,13 +24,22 @@ function CrewPanel({date,locId,da,workers,updDA}){
     updDA(date,locId,role,next);
   };
   return R("div",{style:{background:"#1E2333",border:"1px solid #2E3450",borderRadius:8,padding:"10px 12px",marginTop:8}},
-    R("div",{style:{marginBottom:8}},
+    R("div",{style:{marginBottom:loc?.hasSnackShack?8:0}},
       R("div",{style:{fontSize:11,color:"#6B7394",fontWeight:700,marginBottom:5,textTransform:"uppercase"}},"Field crew ("+(d.fieldCrew||[]).length+"/"+FC+")"),
       R("div",{style:{display:"flex",gap:5,flexWrap:"wrap"}},fw.map(w=>{const sel=(d.fieldCrew||[]).includes(w.id),av=wa(w,date,null,"field");return R("button",{key:w.id,className:"btn btn-sm"+(sel?" btn-blue":""),style:{opacity:av?1:.3,fontSize:11},disabled:!av&&!sel,onClick:()=>tog("fieldCrew",w.id)},w.name.split(" ")[0])}))
     ),
-    R("div",null,
-      R("div",{style:{fontSize:11,color:"#6B7394",fontWeight:700,marginBottom:5,textTransform:"uppercase"}},"Snack shack ("+(d.concessions||[]).length+"/3)"),
-      R("div",{style:{display:"flex",gap:5,flexWrap:"wrap"}},cw.map(w=>{const sel=(d.concessions||[]).includes(w.id),av=wa(w,date,null,"concessions");return R("button",{key:w.id,className:"btn btn-sm"+(sel?" btn-blue":""),style:{opacity:av?1:.3,fontSize:11},disabled:!av&&!sel,onClick:()=>tog("concessions",w.id)},w.name.split(" ")[0])}))
+    loc?.hasSnackShack&&R("div",null,
+      R("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:5}},
+        R("div",{style:{fontSize:11,color:"#6B7394",fontWeight:700,textTransform:"uppercase"}},ssOpen?"Snack shack ("+(d.concessions||[]).length+"/3)":"Snack shack"),
+        R("button",{
+          className:"btn btn-sm",
+          style:ssOpen?{fontSize:10,padding:"2px 8px",background:"#13311F",color:"#7DDBA8",border:"1px solid #3DBA7B"}:{fontSize:10,padding:"2px 8px",background:"#3D2E10",color:"#F0C060",border:"1px solid #E0A030"},
+          onClick:()=>updSnackShackOpen(date,locId,!ssOpen)
+        },ssOpen?"Open":"Closed — tap to open")
+      ),
+      ssOpen
+        ? R("div",{style:{display:"flex",gap:5,flexWrap:"wrap"}},cw.map(w=>{const sel=(d.concessions||[]).includes(w.id),av=wa(w,date,null,"concessions");return R("button",{key:w.id,className:"btn btn-sm"+(sel?" btn-blue":""),style:{opacity:av?1:.3,fontSize:11},disabled:!av&&!sel,onClick:()=>tog("concessions",w.id)},w.name.split(" ")[0])}))
+        : R("div",{style:{fontSize:11,color:"#F0C060"}},"Closed today")
     )
   );
 }
