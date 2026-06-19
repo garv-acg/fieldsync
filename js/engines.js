@@ -81,7 +81,7 @@ function autoSched(games,workers,da,requests,locs){
   return{games:ug,da:nda};
 }
 
-function detConf(games,workers,da){
+function detConf(games,workers,da,locs){
   const conflicts=[];
 
   // Umpires double-booked at the same date+time
@@ -99,11 +99,15 @@ function detConf(games,workers,da){
     conflicts.push({type:"umpire",worker:workers.find(w=>w.id===uid),games:gs});
   });
 
-  // Field crew / concessions assigned to more than one location on the same date
+  // Field crew / concessions assigned to more than one location on the same date.
+  // Skip concessions entries for locations that have no snack shack — stale data shouldn't trigger conflicts.
   const byWorkerDate={};
   Object.entries(da||{}).forEach(([k,v])=>{
     const[date,locId]=k.split("|");
-    [...(v.fieldCrew||[]),...(v.concessions||[])].forEach(wId=>{
+    const loc=(locs||[]).find(l=>l.id===locId);
+    const crew=[...(v.fieldCrew||[])];
+    if(loc?.hasSnackShack)(v.concessions||[]).forEach(id=>crew.push(id));
+    crew.forEach(wId=>{
       const key=wId+"|"+date;
       if(!byWorkerDate[key])byWorkerDate[key]=new Set();
       byWorkerDate[key].add(locId);

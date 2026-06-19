@@ -106,7 +106,7 @@ function App(){
 
   const showToast=(msg,type)=>{setToast({msg,type:type||"info"});setTimeout(()=>setToast(null),3000)};
   const pushNotifs=arr=>{swrite(sb.from('notifications').insert(arr.map(n=>({id:n.id,worker_id:n.workerId,msg:n.msg,time:n.time,read:n.read,type:n.type}))))};
-  const conf=useMemo(()=>detConf(games,workers,da),[games,workers,da]);
+  const conf=useMemo(()=>detConf(games,workers,da,locs),[games,workers,da,locs]);
 
   const runAuto=()=>{
     const r=autoSched(games,workers,da,requests,locs);
