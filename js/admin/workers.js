@@ -2,8 +2,8 @@ function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig
   const[editing,setEditing]=useState(null);
   const ALL_ROLES=["umpire","field","concessions"];
   const workerRoles=w=>w.roles&&w.roles.length?w.roles:[w.role];
-  const defaultRate=w=>w.role==="umpire"?payConfig.umpireRate:w.role==="field"?payConfig.fieldRate:payConfig.concessionsRate;
-  const displayRate=(w,r)=>w.payRate!=null?w.payRate:(r==="umpire"?payConfig.umpireRate:r==="field"?payConfig.fieldRate:payConfig.concessionsRate);
+  const globalRate=r=>r==="umpire"?payConfig.umpireRate:r==="field"?payConfig.fieldRate:payConfig.concessionsRate;
+  const displayRate=(w,r)=>(w.payRates||{})[r]??globalRate(r);
 
   return R("div",null,
     R("div",{className:"ph"},R("div",null,R("h2",null,"Workers"),R("p",null,"Set individual pay rates and roles for each staff member"))),
@@ -21,9 +21,10 @@ function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig
         const rateLabel=roles.map(r=>{
           const rate=displayRate(w,r);
           const unit=r==="umpire"?"/game":r==="field"?"/shift":"/hr";
-          return "$"+rate+unit;
-        }).join(" + ");
-        const isSet=w.payRate!=null;
+          const isSet=(w.payRates||{})[r]!=null;
+          return "$"+rate+unit+(isSet?"":" (default)");
+        }).join("  ·  ");
+        const isSet=roles.some(r=>(w.payRates||{})[r]!=null);
 
         const isEditing=editing===w.id;
         return[
@@ -36,36 +37,36 @@ function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig
             R("td",{style:{padding:"8px 10px"}},R("div",{style:{display:"flex",gap:3,flexWrap:"wrap"}},w.avail.map(d=>R("span",{key:d,style:{padding:"1px 6px",borderRadius:4,fontSize:11,background:"#252A3D",color:"#9BA3BF"}},d)))),
             R("td",{style:{padding:"8px 10px"}},cnt),
             R("td",{style:{padding:"8px 10px"}},
-              R("span",{style:{fontWeight:700,color:isSet?"#E8ECF8":"#6B7394",fontSize:13}},rateLabel),
-              !isSet&&R("span",{style:{fontSize:10,color:"#6B7394",marginLeft:6}},"(default)")
+              R("span",{style:{fontWeight:700,color:"#E8ECF8",fontSize:13}},rateLabel)
             ),
             R("td",{style:{padding:"8px 10px"}},R("button",{className:"btn btn-sm",onClick:()=>setEditing(isEditing?null:w.id)},isEditing?"Done":"Edit"))
           ),
-          isEditing&&R(WorkerEditRow,{key:w.id+"-edit",w,workerRoles,ALL_ROLES,defaultRate,updWorkerRoles,updWorkerPayRate})
+          isEditing&&R(WorkerEditRow,{key:w.id+"-edit",w,workerRoles,ALL_ROLES,globalRate,updWorkerRoles,updWorkerPayRate})
         ];
       }))
     ))
   );
 }
 
-function WorkerEditRow({w,workerRoles,ALL_ROLES,defaultRate,updWorkerRoles,updWorkerPayRate}){
+function WorkerEditRow({w,workerRoles,ALL_ROLES,globalRate,updWorkerRoles,updWorkerPayRate}){
   const roles=workerRoles(w);
   const[pendingRoles,setPendingRoles]=useState(roles);
-  const[rateInput,setRateInput]=useState(w.payRate!=null?String(w.payRate):String(defaultRate(w)));
+  const initRates=()=>{const o={};ALL_ROLES.forEach(r=>{const v=(w.payRates||{})[r];o[r]=v!=null?String(v):""});return o};
+  const[rateInputs,setRateInputs]=useState(initRates);
 
   const toggleRole=r=>{
     if(pendingRoles.includes(r)&&pendingRoles.length===1)return;
     setPendingRoles(p=>p.includes(r)?p.filter(x=>x!==r):[...p,r]);
   };
   const saveRoles=()=>updWorkerRoles(w.id,pendingRoles);
-  const saveRate=()=>{
-    const v=parseFloat(rateInput);
-    updWorkerPayRate(w.id,isNaN(v)?null:v);
+  const saveRate=role=>{
+    const v=parseFloat(rateInputs[role]);
+    updWorkerPayRate(w.id,role,isNaN(v)?null:v);
   };
-  const unit=w.role==="umpire"?"per game":w.role==="field"?"per shift (flat)":"per hour";
+  const UNITS={umpire:"per game",field:"per shift (flat)",concessions:"per hour"};
 
   return R("tr",{style:{background:"#1A1F2E",borderTop:"none"}},
-    R("td",{colSpan:7,style:{padding:"12px 20px"}},
+    R("td",{colSpan:7,style:{padding:"14px 20px"}},
       R("div",{style:{display:"flex",gap:32,alignItems:"flex-start",flexWrap:"wrap"}},
         R("div",null,
           R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",marginBottom:8}},"Roles"),
@@ -75,13 +76,23 @@ function WorkerEditRow({w,workerRoles,ALL_ROLES,defaultRate,updWorkerRoles,updWo
           R("button",{className:"btn btn-sm btn-green",style:{marginTop:8},onClick:saveRoles},"Save roles")
         ),
         R("div",null,
-          R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",marginBottom:4}},"Individual pay rate"),
-          R("div",{style:{fontSize:11,color:"#6B7394",marginBottom:8}},unit),
-          R("div",{style:{display:"flex",gap:8,alignItems:"center"}},
-            R("span",{style:{color:"#9BA3BF",fontSize:16}},"$"),
-            R("input",{type:"number",min:0,step:0.5,value:rateInput,onChange:e=>setRateInput(e.target.value),
-              style:{width:90,padding:"6px 10px",borderRadius:6,border:"1px solid #5B7FFF",background:"#1E2333",color:"#E8ECF8",fontSize:15,fontWeight:700}}),
-            R("button",{className:"btn btn-sm btn-green",onClick:saveRate},"Save")
+          R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",marginBottom:10}},"Pay rates"),
+          R("div",{style:{display:"flex",gap:20,flexWrap:"wrap"}},
+            ALL_ROLES.map(r=>{
+              const active=pendingRoles.includes(r);
+              return R("div",{key:r,style:{opacity:active?1:0.35}},
+                R("div",{style:{fontSize:11,color:"#6B7394",marginBottom:4}},rl(r)+" · "+UNITS[r]),
+                R("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+                  R("span",{style:{color:"#9BA3BF"}},"$"),
+                  R("input",{type:"number",min:0,step:0.5,disabled:!active,
+                    value:rateInputs[r],
+                    placeholder:String(globalRate(r)),
+                    onChange:e=>setRateInputs(p=>({...p,[r]:e.target.value})),
+                    style:{width:80,padding:"5px 8px",borderRadius:6,border:"1px solid "+(active?"#5B7FFF":"#2E3450"),background:"#1E2333",color:"#E8ECF8",fontSize:13,fontWeight:700}}),
+                  active&&R("button",{className:"btn btn-sm btn-green",onClick:()=>saveRate(r)},"Save")
+                )
+              );
+            })
           )
         )
       )

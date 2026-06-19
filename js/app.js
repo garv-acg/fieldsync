@@ -17,7 +17,7 @@ function getDragger(date,locId,da,workers,overrides,requests){
 }
 
 // ── Supabase row <-> app shape converters ──────────────────────────
-function rowToWorker(r){return{id:r.id,name:r.name,email:r.email,password:r.password,role:r.role,avail:r.avail||[],yearsExp:r.years_exp||0,phone:r.phone||"",roles:r.roles||null,payRate:r.pay_rate||null}}
+function rowToWorker(r){return{id:r.id,name:r.name,email:r.email,password:r.password,role:r.role,avail:r.avail||[],yearsExp:r.years_exp||0,phone:r.phone||"",roles:r.roles||null,payRates:r.pay_rates||{}}}
 function rowToLoc(r){return{id:r.id,name:r.name,fields:r.fields||[]}}
 function rowToGame(r){return{id:r.id,locId:r.loc_id,field:r.field,division:r.division,date:r.date,time:r.time,home:r.home,away:r.away,status:r.status,ump1:r.ump1==null?NONE:r.ump1,ump2:r.ump2==null?NONE:r.ump2}}
 function rowToReq(r){return{id:r.id,type:r.type,workerId:r.worker_id,date:r.date,dateStart:r.date_start,dateEnd:r.date_end,locId:r.loc_id,role:r.role,label:r.label,reason:r.reason,claimedBy:r.claimed_by,status:r.status,created:r.created}}
@@ -223,9 +223,10 @@ function App(){
     swrite(sb.from('workers').update({roles}).eq('id',wId));
     showToast("Roles updated","s");
   };
-  const updWorkerPayRate=(wId,payRate)=>{
-    setWorkers(p=>p.map(w=>w.id===wId?{...w,payRate}:w));
-    swrite(sb.from('workers').update({pay_rate:payRate}).eq('id',wId));
+  const updWorkerPayRate=(wId,role,rate)=>{
+    setWorkers(p=>p.map(w=>w.id===wId?{...w,payRates:{...w.payRates,[role]:rate}}:w));
+    const pr={...(workers.find(w=>w.id===wId)?.payRates||{}),[role]:rate};
+    swrite(sb.from('workers').update({pay_rates:pr}).eq('id',wId));
     showToast("Pay rate updated","s");
   };
 

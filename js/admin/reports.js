@@ -2,7 +2,8 @@
 function workerRoles(w){return(w.roles&&w.roles.length)?w.roles:[w.role]}
 
 function effectiveRate(w,role,payConfig){
-  if(w.payRate!=null)return w.payRate;
+  const r=(w.payRates||{})[role];
+  if(r!=null)return r;
   return role==="umpire"?payConfig.umpireRate:role==="field"?payConfig.fieldRate:payConfig.concessionsRate;
 }
 
