@@ -24,6 +24,7 @@ const wa=(w,date,requests)=>{
 };
 const rsvpKey=(wId,date,locId)=>`${wId}_${date}_${locId}`;
 const normDiv=raw=>{if(!raw)return"AA";if(raw.toLowerCase().includes("9-11")||raw.toLowerCase().includes("district"))return"Majors";return{"Minors AA":"AA","Minors AAA":"AAA","Minors A":"A","Teeball":"Tee Ball","T-Ball":"Tee Ball","8U":"Softball 8U","10U":"Softball 10U","12U":"Softball 12U"}[raw]||raw};
+const PAY_DEFAULTS={umpireRate:45,fieldRate:34,concessionsRate:17};
 const LOCS=[{id:"sc",name:"Spring Creek",fields:["Field 1","Field 2","Field 3"]},{id:"mv",name:"Mission Viejo",fields:["Field 1","Field 2","Field 3","Field 4"]}];
 const WORKERS=[
   {id:1,name:"Jordan Lee",role:"umpire",email:"jordan@crew.com",avail:["Mon","Wed","Fri","Sat","Sun"],password:"ump"},

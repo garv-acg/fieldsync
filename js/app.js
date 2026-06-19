@@ -17,7 +17,7 @@ function getDragger(date,locId,da,workers,overrides,requests){
 }
 
 // ── Supabase row <-> app shape converters ──────────────────────────
-function rowToWorker(r){return{id:r.id,name:r.name,email:r.email,password:r.password,role:r.role,avail:r.avail||[],yearsExp:r.years_exp||0,phone:r.phone||""}}
+function rowToWorker(r){return{id:r.id,name:r.name,email:r.email,password:r.password,role:r.role,avail:r.avail||[],yearsExp:r.years_exp||0,phone:r.phone||"",roles:r.roles||null,payRate:r.pay_rate||null}}
 function rowToLoc(r){return{id:r.id,name:r.name,fields:r.fields||[]}}
 function rowToGame(r){return{id:r.id,locId:r.loc_id,field:r.field,division:r.division,date:r.date,time:r.time,home:r.home,away:r.away,status:r.status,ump1:r.ump1==null?NONE:r.ump1,ump2:r.ump2==null?NONE:r.ump2}}
 function rowToReq(r){return{id:r.id,type:r.type,workerId:r.worker_id,date:r.date,dateStart:r.date_start,dateEnd:r.date_end,locId:r.loc_id,role:r.role,label:r.label,reason:r.reason,claimedBy:r.claimed_by,status:r.status,created:r.created}}
@@ -28,6 +28,7 @@ function swrite(promise){promise.then(({error})=>{if(error)console.error("Supaba
 
 function App(){
   const[user,setUser]=useState(null),[view,setView]=useState("today"),[locs,setLocs]=useState([]),[workers,setWorkers]=useState([]),[games,setGames]=useState([]),[da,setDA]=useState({}),[pub,setPub]=useState(new Set()),[rsvp,setRsvp]=useState({}),[requests,setRequests]=useState([]),[notifs,setNotifs]=useState([]),[modal,setModal]=useState(null),[toast,setToast]=useState(null),[draggerOverrides,setDraggerOverrides]=useState({}),[loaded,setLoaded]=useState(false);
+  const[payConfig,setPayConfig]=useState(()=>{try{const s=localStorage.getItem('fsPayConfig');return s?JSON.parse(s):PAY_DEFAULTS}catch{return PAY_DEFAULTS}});
 
   // ── Initial load from Supabase + realtime subscriptions for multi-device sync ──
   React.useEffect(()=>{
@@ -46,7 +47,7 @@ function App(){
       setWorkers((w.data||[]).map(rowToWorker));
       setLocs((l.data||[]).map(rowToLoc));
       setGames((g.data||[]).map(rowToGame));
-      const ndaMap={};(d.data||[]).forEach(row=>{ndaMap[row.date+"|"+row.loc_id]={fieldCrew:row.field_crew||[],concessions:row.concessions||[]}});
+      const ndaMap={};(d.data||[]).forEach(row=>{ndaMap[row.date+"|"+row.loc_id]={fieldCrew:row.field_crew||[],concessions:row.concessions||[],concessionsHours:row.concessions_hours||{}}});
       setDA(ndaMap);
       setPub(new Set((p.data||[]).map(row=>row.week_key)));
       const rsvpMap={};(r.data||[]).forEach(row=>{rsvpMap[row.worker_id+"_"+row.date+"_"+row.loc_id]=row.status});
@@ -74,7 +75,7 @@ function App(){
       .on('postgres_changes',{event:'*',schema:'public',table:'day_assignments'},({eventType,new:nw,old})=>{
         const key=eventType==='DELETE'?old.date+"|"+old.loc_id:nw.date+"|"+nw.loc_id;
         if(eventType==='DELETE')setDA(p=>{const c={...p};delete c[key];return c});
-        else setDA(p=>({...p,[key]:{fieldCrew:nw.field_crew||[],concessions:nw.concessions||[]}}));
+        else setDA(p=>({...p,[key]:{fieldCrew:nw.field_crew||[],concessions:nw.concessions||[],concessionsHours:nw.concessions_hours||{}}}));
       })
       .on('postgres_changes',{event:'*',schema:'public',table:'published_weeks'},({eventType,new:nw,old})=>{
         if(eventType==='DELETE')setPub(p=>{const c=new Set(p);c.delete(old.week_key);return c});
@@ -207,8 +208,25 @@ function App(){
   };
   const updDA=(date,locId,role,arr)=>{
     const k=dk(date,locId);
-    setDA(p=>({...p,[k]:{...(p[k]||{fieldCrew:[],concessions:[]}),[role]:arr}}));
+    setDA(p=>({...p,[k]:{...(p[k]||{fieldCrew:[],concessions:[],concessionsHours:{}}),[role]:arr}}));
     swrite(sb.from('day_assignments').upsert({date,loc_id:locId,[role==='fieldCrew'?'field_crew':'concessions']:arr}));
+  };
+  const updConcessionsHours=(date,locId,wId,hours)=>{
+    const k=dk(date,locId);
+    setDA(p=>{const prev=p[k]||{fieldCrew:[],concessions:[],concessionsHours:{}};const ch={...prev.concessionsHours,[wId]:hours};return{...p,[k]:{...prev,concessionsHours:ch}}});
+    const ch={...(da[dk(date,locId)]?.concessionsHours||{}),[wId]:hours};
+    swrite(sb.from('day_assignments').upsert({date,loc_id:locId,concessions_hours:ch}));
+  };
+  const updPayConfig=cfg=>{const n={...payConfig,...cfg};setPayConfig(n);try{localStorage.setItem('fsPayConfig',JSON.stringify(n))}catch{}};
+  const updWorkerRoles=(wId,roles)=>{
+    setWorkers(p=>p.map(w=>w.id===wId?{...w,roles}:w));
+    swrite(sb.from('workers').update({roles}).eq('id',wId));
+    showToast("Roles updated","s");
+  };
+  const updWorkerPayRate=(wId,payRate)=>{
+    setWorkers(p=>p.map(w=>w.id===wId?{...w,payRate}:w));
+    swrite(sb.from('workers').update({pay_rate:payRate}).eq('id',wId));
+    showToast("Pay rate updated","s");
   };
 
   // Send an in-app reminder notification to every worker scheduled on a given date,
@@ -344,7 +362,7 @@ function App(){
   const adminNav=[{id:"today",label:"Today"},{id:"schedule",label:"Schedule"},{id:"staff",label:"Staff",badge:conf.length},{id:"requests",label:"Requests",badge:pendingR},{id:"reports",label:"Reports"},{id:"settings",label:"Settings"}];
   const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"notifications",label:"Notifications",badge:unread}];
   const nav=user.role==="overseer"?adminNav:workerNav;
-  const sp={user,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders};
+  const sp={user,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updWorkerRoles,updWorkerPayRate};
   return R("div",{className:"app"},
     R("div",{className:"topbar"},
       R("div",{className:"logo"},"Field",R("span",null,"Sync")),
