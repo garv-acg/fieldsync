@@ -31,17 +31,28 @@ const normDiv=raw=>{if(!raw)return"AA";if(raw.toLowerCase().includes("9-11")||ra
 const PAY_DEFAULTS={umpireRate:45,fieldRate:34,concessionsRate:17};
 const LOCS=[{id:"sc",name:"Spring Creek",fields:["Field 1","Field 2","Field 3"],hasSnackShack:false},{id:"mv",name:"Mission Viejo",fields:["Field 1","Field 2","Field 3","Field 4"],hasSnackShack:true}];
 const WORKERS=[
+  // ── Umpires (placeholder — real umpires TBD) ──────────────────────
   {id:1,name:"Jordan Lee",role:"umpire",roles:["umpire","field","concessions"],email:"jordan@crew.com",avail:["Mon","Wed","Fri","Sat","Sun"],password:"ump"},
   {id:2,name:"Sam Rivera",role:"umpire",email:"sam@crew.com",avail:["Tue","Thu","Sat","Sun"],password:"ump2"},
   {id:3,name:"Riley Stone",role:"umpire",email:"riley@crew.com",avail:["Wed","Thu","Sat","Sun"],password:"ump3"},
   {id:4,name:"Taylor Brooks",role:"umpire",email:"taylor@crew.com",avail:["Mon","Tue","Fri","Sat"],password:"ump4"},
-  {id:5,name:"Alex Kim",role:"field",email:"alex@crew.com",avail:["Mon","Tue","Wed","Sat","Sun"],password:"field"},
-  {id:6,name:"Morgan Chase",role:"field",email:"morgan@crew.com",avail:["Thu","Fri","Sat","Sun"],password:"field2"},
-  {id:7,name:"Quinn Davis",role:"field",email:"quinn@crew.com",avail:["Mon","Tue","Thu","Sat"],password:"field3"},
-  {id:8,name:"Jamie Reed",role:"field",email:"jamie@crew.com",avail:["Wed","Fri","Sat","Sun"],password:"field4"},
-  {id:9,name:"Casey Park",role:"concessions",email:"casey@crew.com",avail:["Fri","Sat","Sun"],password:"conc"},
-  {id:10,name:"Drew Walsh",role:"concessions",email:"drew@crew.com",avail:["Mon","Wed","Sat","Sun"],password:"conc2"},
-  {id:11,name:"Skyler Moss",role:"concessions",email:"skyler@crew.com",avail:["Tue","Thu","Sat","Sun"],password:"conc3"},
+  // ── Field crew ────────────────────────────────────────────────────
+  {id:5,name:"Aidan Garver",role:"field",email:"aidan.garver@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:6,password:"aidan"},
+  {id:6,name:"Brennan Niewinski",role:"field",email:"brennan.niewinski@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:6,password:"brennan"},
+  {id:7,name:"Brock Benedict",role:"field",email:"brock.benedict@crew.com",avail:["Mon","Wed"],yearsExp:1,password:"brock"},
+  {id:8,name:"Trey Felts",role:"field",email:"trey.felts@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:1,password:"trey"},
+  {id:9,name:"Amelia Deatherage",role:"field",email:"amelia.deatherage@crew.com",avail:["Mon","Wed","Fri","Sat"],yearsExp:1,password:"amelia"},
+  {id:10,name:"Dylan Keisler",role:"field",email:"dylan.keisler@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:3,password:"dylan"},
+  // NOTE: Caroline and Lucy should be scheduled on the same shifts when possible
+  {id:11,name:"Caroline Pavlisko",role:"field",email:"caroline.pavlisko@crew.com",avail:["Mon","Wed","Fri"],yearsExp:1,password:"caroline"},
+  {id:12,name:"Lucy Davis",role:"field",email:"lucy.davis@crew.com",avail:["Mon","Wed","Sat"],yearsExp:1,password:"lucy"},
+  // ── Snack shack (concessions) ────────────────────────────────────
+  // NOTE: Ben and Jack must be scheduled together on the same shift
+  {id:13,name:"James",role:"concessions",email:"james@crew.com",avail:["Mon","Thu","Fri"],yearsExp:0,password:"james"},   // Grill operator
+  {id:14,name:"Ben",role:"concessions",email:"ben@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:0,password:"ben"},     // Back of house
+  {id:15,name:"Jack",role:"concessions",email:"jack@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:0,password:"jack"},   // Back of house
+  {id:16,name:"Juliana",role:"concessions",email:"juliana@crew.com",avail:[],yearsExp:0,password:"juliana"},              // Cashier — manual scheduling only; unpredictable hours
+  {id:17,name:"Natalia",role:"concessions",email:"natalia@crew.com",avail:["Mon","Thu","Fri"],yearsExp:0,password:"natalia"}, // Volunteer (age 12) — use only when extra help needed
 ];
 const INIT_GAMES=[
   {id:1001,locId:"sc",field:"Field 1",division:"AA",date:"2026-06-13",time:"9:00 AM",home:"Angels",away:"Bears",status:"scheduled",ump1:1,ump2:NONE},
@@ -54,8 +65,24 @@ const INIT_GAMES=[
   {id:1008,locId:"sc",field:"Field 1",division:"AAA",date:"2026-06-21",time:"10:00 AM",home:"Angels",away:"Bears",status:"scheduled",ump1:1,ump2:2},
   {id:1009,locId:"mv",field:"Field 2",division:"Majors",date:"2026-06-22",time:"1:00 PM",home:"Cardinals",away:"Eagles",status:"scheduled",ump1:1,ump2:3},
 ];
-const INIT_DA={"2026-06-13|sc":{fieldCrew:[1,5,6,7],concessions:[]},"2026-06-14|mv":{fieldCrew:[1,6,8],concessions:[10,11]},"2026-06-14|sc":{fieldCrew:[5,7],concessions:[]},"2026-06-21|sc":{fieldCrew:[1,5,6,7],concessions:[]},"2026-06-22|mv":{fieldCrew:[1,6,8],concessions:[9,10]}};
-const INIT_PUB=new Set(["2026-06-08"]);
-const INIT_RSVP={[rsvpKey(1,"2026-06-13","sc")]:"confirmed",[rsvpKey(5,"2026-06-13","sc")]:"confirmed"};
-const INIT_REQUESTS=[{id:201,type:"time_off",workerId:1,dateStart:"2026-06-20",dateEnd:"2026-06-20",reason:"Family event",status:"pending",created:"2026-06-05"}];
-const INIT_NOTIFS=[{id:1,workerId:1,msg:"Week of June 8 published — check your shifts.",time:"Today",read:false,type:"info"}];
+const INIT_DA={};
+const INIT_PUB=new Set([]);
+const INIT_RSVP={};
+const INIT_REQUESTS=[
+  // ── Field crew vacations (pre-approved) ───────────────────────────
+  {id:301,type:"vacation",workerId:7,dateStart:"2026-06-08",dateEnd:"2026-06-21",reason:"Vacation",status:"approved",created:"2026-06-01"},   // Brock
+  {id:302,type:"vacation",workerId:9,dateStart:"2026-06-19",dateEnd:"2026-06-27",reason:"Vacation",status:"approved",created:"2026-06-01"},   // Amelia
+  {id:303,type:"time_off",workerId:10,dateStart:"2026-06-27",dateEnd:"2026-06-27",reason:"Time off",status:"approved",created:"2026-06-01"}, // Dylan Jun 27
+  {id:304,type:"time_off",workerId:12,dateStart:"2026-06-21",dateEnd:"2026-06-21",reason:"Time off",status:"approved",created:"2026-06-01"}, // Lucy Jun 21
+  {id:305,type:"vacation",workerId:9,dateStart:"2026-07-06",dateEnd:"2026-07-09",reason:"Vacation",status:"approved",created:"2026-06-01"},   // Amelia Jul 6–9
+  {id:306,type:"vacation",workerId:9,dateStart:"2026-07-13",dateEnd:"2026-07-16",reason:"Vacation",status:"approved",created:"2026-06-01"},   // Amelia Jul 13–16
+  {id:307,type:"vacation",workerId:8,dateStart:"2026-07-19",dateEnd:"2026-07-31",reason:"Vacation",status:"approved",created:"2026-06-01"},   // Trey Jul 19–31
+  {id:308,type:"time_off",workerId:11,dateStart:"2026-07-22",dateEnd:"2026-07-22",reason:"Time off",status:"approved",created:"2026-06-01"}, // Caroline Jul 22
+  {id:309,type:"vacation",workerId:9,dateStart:"2026-07-29",dateEnd:"2026-08-02",reason:"Vacation",status:"approved",created:"2026-06-01"},   // Amelia Jul 29–Aug 2
+  {id:310,type:"time_off",workerId:10,dateStart:"2026-08-13",dateEnd:"2026-08-13",reason:"Time off",status:"approved",created:"2026-06-01"}, // Dylan Aug 13
+  // ── Snack shack specific-date blocks ─────────────────────────────
+  {id:311,type:"time_off",workerId:14,dateStart:"2026-07-15",dateEnd:"2026-07-15",reason:"Unavailable",status:"approved",created:"2026-06-01"}, // Ben Jul 15
+  {id:312,type:"time_off",workerId:16,dateStart:"2026-07-20",dateEnd:"2026-07-20",reason:"Not available",status:"approved",created:"2026-06-01"}, // Juliana Jul 20
+  {id:313,type:"time_off",workerId:16,dateStart:"2026-07-27",dateEnd:"2026-07-27",reason:"Not available",status:"approved",created:"2026-06-01"}, // Juliana Jul 27
+];
+const INIT_NOTIFS=[];
