@@ -11,7 +11,7 @@ function getDragger(date,locId,da,workers,overrides){
 }
 
 // ── Supabase row <-> app shape converters ──────────────────────────
-function rowToWorker(r){return{id:r.id,name:r.name,email:r.email,password:r.password,role:r.role,avail:r.avail||[],yearsExp:r.years_exp||0}}
+function rowToWorker(r){return{id:r.id,name:r.name,email:r.email,password:r.password,role:r.role,avail:r.avail||[],yearsExp:r.years_exp||0,phone:r.phone||""}}
 function rowToLoc(r){return{id:r.id,name:r.name,fields:r.fields||[]}}
 function rowToGame(r){return{id:r.id,locId:r.loc_id,field:r.field,division:r.division,date:r.date,time:r.time,home:r.home,away:r.away,status:r.status,ump1:r.ump1==null?NONE:r.ump1,ump2:r.ump2==null?NONE:r.ump2}}
 function rowToReq(r){return{id:r.id,type:r.type,workerId:r.worker_id,date:r.date,dateStart:r.date_start,dateEnd:r.date_end,locId:r.loc_id,role:r.role,label:r.label,reason:r.reason,claimedBy:r.claimed_by,status:r.status,created:r.created}}
@@ -205,13 +205,19 @@ function App(){
     swrite(sb.from('day_assignments').upsert({date,loc_id:locId,[role==='fieldCrew'?'field_crew':'concessions']:arr}));
   };
 
-  // Send an in-app reminder notification to every worker scheduled on a given date
+  // Send an in-app reminder notification to every worker scheduled on a given date,
+  // plus email/SMS via the send-reminder Edge Function for anyone with contact info on file
   const sendReminders=(date)=>{
     const aff=new Set();
     games.filter(g=>g.date===date&&g.status==="scheduled").forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE)aff.add(u)})});
     Object.entries(da).filter(([k])=>k.split("|")[0]===date).forEach(([,v])=>{(v.fieldCrew||[]).forEach(u=>aff.add(u));(v.concessions||[]).forEach(u=>aff.add(u))});
     const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"🔔 Reminder: you're scheduled on "+date+" — check My Shifts for details.",time:"Just now",read:false,type:"info"}));
     setNotifs(p=>[...n,...p]);pushNotifs(n);
+    const recipients=workers.filter(w=>aff.has(w.id)&&(w.email||w.phone)).map(w=>({name:w.name,email:w.email||null,phone:w.phone||null}));
+    if(recipients.length){
+      sb.functions.invoke('send-reminder',{body:{recipients,subject:"FieldSync reminder",message:"Reminder: you're scheduled on "+date+" — check My Shifts in FieldSync for details."}})
+        .then(({error})=>{if(error)console.error("Reminder dispatch failed:",error)});
+    }
     showToast(aff.size>0?"Reminders sent to "+aff.size+" worker"+(aff.size>1?"s":""):"No one scheduled that day",aff.size>0?"s":"info");
   };
 
@@ -220,6 +226,13 @@ function App(){
     setWorkers(p=>p.map(w=>w.id===wId?{...w,yearsExp:Number(years)}:w));
     swrite(sb.from('workers').update({years_exp:Number(years)}).eq('id',wId));
     showToast("Experience updated","s");
+  };
+
+  // Update a worker's phone number (used for SMS reminders)
+  const updPhone=(wId,phone)=>{
+    setWorkers(p=>p.map(w=>w.id===wId?{...w,phone}:w));
+    swrite(sb.from('workers').update({phone}).eq('id',wId));
+    showToast("Phone updated","s");
   };
 
   // Manually override the dragger for a given date+location
@@ -325,7 +338,7 @@ function App(){
   const adminNav=[{id:"today",label:"Today"},{id:"dashboard",label:"Dashboard"},{id:"schedule",label:"Schedule"},{id:"games",label:"Games"},{id:"umpires",label:"Umpires",badge:conf.length},{id:"workers",label:"Workers"},{id:"requests",label:"Requests",badge:pendingR},{id:"timeoff",label:"Time Off"},{id:"locations",label:"Locations"},{id:"reports",label:"Reports"},{id:"notifications",label:"Notifications",badge:unread}];
   const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"notifications",label:"Notifications",badge:unread}];
   const nav=user.role==="overseer"?adminNav:workerNav;
-  const sp={user,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,setDraggerOverride,sendReminders};
+  const sp={user,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders};
   return R("div",{className:"app"},
     R("div",{className:"topbar"},
       R("div",{className:"logo"},"Field",R("span",null,"Sync")),

@@ -1,13 +1,14 @@
-function AvailView({user,workers,updAvail,updYears}){
+function AvailView({user,workers,updAvail,updYears,updPhone}){
   const w=workers.find(x=>x.id===user.id);
   const[sel,setSel]=useState(w?w.avail:[]);
   const[yrs,setYrs]=useState(w?.yearsExp||0);
+  const[phone,setPhone]=useState(w?.phone||"");
   const[saved,setSaved]=useState(false);
   const tog=d=>{setSel(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d]);setSaved(false)};
   const expLabel=user.role==="umpire"?"Years umpiring":user.role==="field"?"Years on field crew":"Years working concessions";
-  const save=()=>{updAvail(user.id,sel);updYears(user.id,yrs);setSaved(true);setTimeout(()=>setSaved(false),2000)};
+  const save=()=>{updAvail(user.id,sel);updYears(user.id,yrs);updPhone(user.id,phone);setSaved(true);setTimeout(()=>setSaved(false),2000)};
   return R("div",null,
-    R("div",{className:"ph"},R("div",null,R("h2",null,"My Profile"),R("p",null,"Experience & availability — used by the auto-scheduler"))),
+    R("div",{className:"ph"},R("div",null,R("h2",null,"My Profile"),R("p",null,"Experience, contact info & availability — used by the auto-scheduler and reminders"))),
     R("div",{className:"card"},
       R("div",{style:{marginBottom:20}},
         R("label",{style:{display:"block",fontWeight:700,fontSize:13,marginBottom:6,color:"#C8D0E8"}},expLabel),
@@ -20,6 +21,17 @@ function AvailView({user,workers,updAvail,updYears}){
           }),
           R("span",{style:{color:"#9BA3BF",fontSize:13}},"years")
         )
+      ),
+      R("div",{style:{marginBottom:20}},
+        R("label",{style:{display:"block",fontWeight:700,fontSize:13,marginBottom:6,color:"#C8D0E8"}},"Phone number"),
+        R("input",{
+          type:"tel",
+          value:phone,
+          onChange:e=>setPhone(e.target.value),
+          placeholder:"+15551234567",
+          style:{width:200,padding:"6px 10px",borderRadius:8,border:"1px solid #2E3450",background:"#1E2333",color:"#E8ECF8",fontSize:14}
+        }),
+        R("div",{style:{fontSize:11,color:"#6B7394",marginTop:5}},"Used for SMS reminders. Include country code, e.g. +1 for US.")
       ),
       R("p",{style:{color:"#9BA3BF",fontSize:13,marginBottom:12}},"Tap each day you're available to work."),
       R("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8,marginBottom:16}},WDAYS.map(d=>{
