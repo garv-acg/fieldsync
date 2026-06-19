@@ -6,6 +6,7 @@ function ModalRouter(props){
   if(modal.type==="add_loc")return R(AddLocModal,props);
   if(modal.type==="add_field")return R(AddFieldModal,props);
   if(modal.type==="import")return R(ImportModal,props);
+  if(modal.type==="add_worker")return R(AddWorkerModal,props);
   return null;
 }
 function GameModal({modal,locs,onClose,addGame,editGame}){
@@ -89,6 +90,41 @@ function AddFieldModal({modal,onClose,addField}){
       R("div",{className:"modal-hdr"},R("span",{className:"modal-title"},"Add field — "+modal.locName),R("button",{className:"btn btn-sm",onClick:onClose},"✕")),
       R("div",{className:"form-group"},R("label",{className:"form-label"},"Field name"),R("input",{className:"form-input",value:name,onChange:e=>setName(e.target.value),placeholder:"e.g. Field 5",onKeyDown:e=>e.key==="Enter"&&name&&addField(modal.locId,name)})),
       R("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},R("button",{className:"btn",onClick:onClose},"Cancel"),R("button",{className:"btn btn-blue",onClick:()=>name&&addField(modal.locId,name)},"Add field"))
+    )
+  );
+}
+function AddWorkerModal({onClose,addWorker}){
+  const ALL_ROLES=["umpire","field","concessions"];
+  const ALL_DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const[f,setF]=useState({name:"",email:"",password:"",roles:["umpire"],avail:["Sat","Sun"]});
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const toggleRole=r=>setF(p=>{const has=p.roles.includes(r);if(has&&p.roles.length===1)return p;return{...p,roles:has?p.roles.filter(x=>x!==r):[...p.roles,r]}});
+  const toggleDay=d=>setF(p=>{const has=p.avail.includes(d);if(has&&p.avail.length===1)return p;return{...p,avail:has?p.avail.filter(x=>x!==d):[...p.avail,d]}});
+  const valid=f.name.trim()&&f.email.trim()&&f.password.trim()&&f.roles.length>0&&f.avail.length>0;
+  return R("div",{className:"modal-wrap",onClick:e=>e.target.className==="modal-wrap"&&onClose()},
+    R("div",{className:"modal"},
+      R("div",{className:"modal-hdr"},R("span",{className:"modal-title"},"Add worker"),R("button",{className:"btn btn-sm",onClick:onClose},"✕")),
+      R("div",{className:"g2"},
+        R("div",{className:"form-group"},R("label",{className:"form-label"},"Name"),R("input",{className:"form-input",value:f.name,onChange:e=>set("name",e.target.value),placeholder:"Full name",autoFocus:true})),
+        R("div",{className:"form-group"},R("label",{className:"form-label"},"Email"),R("input",{type:"email",className:"form-input",value:f.email,onChange:e=>set("email",e.target.value),placeholder:"worker@example.com"}))
+      ),
+      R("div",{className:"form-group"},R("label",{className:"form-label"},"Temporary password"),R("input",{className:"form-input",value:f.password,onChange:e=>set("password",e.target.value),placeholder:"Worker uses this to log in"})),
+      R("div",{className:"form-group"},
+        R("label",{className:"form-label"},"Roles"),
+        R("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+          ALL_ROLES.map(r=>R("button",{key:r,className:"btn btn-sm"+(f.roles.includes(r)?" btn-blue":""),onClick:()=>toggleRole(r)},rl(r)))
+        )
+      ),
+      R("div",{className:"form-group"},
+        R("label",{className:"form-label"},"Default availability"),
+        R("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
+          ALL_DAYS.map(d=>R("button",{key:d,className:"btn btn-sm"+(f.avail.includes(d)?" btn-blue":""),onClick:()=>toggleDay(d)},d))
+        )
+      ),
+      R("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}},
+        R("button",{className:"btn",onClick:onClose},"Cancel"),
+        R("button",{className:"btn btn-blue",disabled:!valid,onClick:()=>valid&&addWorker(f)},"Add worker")
+      )
     )
   );
 }

@@ -1,4 +1,4 @@
-function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig}){
+function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig,setModal}){
   const[editing,setEditing]=useState(null);
   const ALL_ROLES=["umpire","field","concessions"];
   const workerRoles=w=>w.roles&&w.roles.length?w.roles:[w.role];
@@ -6,7 +6,10 @@ function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig
   const displayRate=(w,r)=>(w.payRates||{})[r]??globalRate(r);
 
   return R("div",null,
-    R("div",{className:"ph"},R("div",null,R("h2",null,"Workers"),R("p",null,"Set individual pay rates and roles for each staff member"))),
+    R("div",{className:"ph"},
+      R("div",null,R("h2",null,"Workers"),R("p",null,"Set individual pay rates and roles for each staff member")),
+      R("button",{className:"btn btn-blue",onClick:()=>setModal({type:"add_worker"})},"+  Add worker")
+    ),
     R("div",{className:"card"},R("table",{className:"tbl"},
       R("thead",null,R("tr",null,
         R("th",null,"Name"),R("th",null,"Roles"),R("th",null,"Email"),R("th",null,"Available"),R("th",null,"Shifts"),R("th",null,"Rate"),R("th",null,"")

@@ -29,6 +29,7 @@ function swrite(promise){promise.then(({error})=>{if(error)console.error("Supaba
 function App(){
   const[user,setUser]=useState(null),[view,setView]=useState("today"),[locs,setLocs]=useState([]),[workers,setWorkers]=useState([]),[games,setGames]=useState([]),[da,setDA]=useState({}),[pub,setPub]=useState(new Set()),[rsvp,setRsvp]=useState({}),[requests,setRequests]=useState([]),[notifs,setNotifs]=useState([]),[modal,setModal]=useState(null),[toast,setToast]=useState(null),[draggerOverrides,setDraggerOverrides]=useState({}),[loaded,setLoaded]=useState(false);
   const[payConfig,setPayConfig]=useState(()=>{try{const s=localStorage.getItem('fsPayConfig');return s?JSON.parse(s):PAY_DEFAULTS}catch{return PAY_DEFAULTS}});
+  const applyPayConfig=cfg=>{setPayConfig(cfg);try{localStorage.setItem('fsPayConfig',JSON.stringify(cfg))}catch{}};
 
   // ── Initial load from Supabase + realtime subscriptions for multi-device sync ──
   React.useEffect(()=>{
@@ -56,6 +57,9 @@ function App(){
       setNotifs((n.data||[]).map(rowToNotif));
       const drMap={};(dr.data||[]).forEach(row=>{drMap[row.date+"|"+row.loc_id]=row.worker_id});
       setDraggerOverrides(drMap);
+      // Load pay config from Supabase (falls back to localStorage if table absent)
+      const pc=await sb.from('settings').select('value').eq('key','pay_config').maybeSingle();
+      if(pc.data?.value)applyPayConfig({...PAY_DEFAULTS,...pc.data.value});
       setLoaded(true);
     })();
 
@@ -222,7 +226,16 @@ function App(){
     setDA(p=>({...p,[k]:{...(p[k]||{fieldCrew:[],concessions:[],concessionsHours:{}}),snackShackOpen:open}}));
     swrite(sb.from('day_assignments').upsert({date,loc_id:locId,snack_shack_open:open}));
   };
-  const updPayConfig=cfg=>{const n={...payConfig,...cfg};setPayConfig(n);try{localStorage.setItem('fsPayConfig',JSON.stringify(n))}catch{}};
+  const updPayConfig=cfg=>{const n={...payConfig,...cfg};applyPayConfig(n);swrite(sb.from('settings').upsert({key:'pay_config',value:n}));};
+  const addWorker=({name,email,password,roles,avail})=>{
+    const newId=Math.max(0,...workers.map(w=>w.id))+1;
+    const primary=roles[0];
+    const nw={id:newId,name,email,password,role:primary,roles,avail,availByRole:{},yearsExp:0,phone:"",payRates:{}};
+    setWorkers(p=>[...p,nw]);
+    swrite(sb.from('workers').insert({id:newId,name,email,password,role:primary,roles,avail,avail_by_role:{},years_exp:0,phone:"",pay_rates:{}}));
+    showToast(name+" added","s");
+    setModal(null);
+  };
   const updWorkerRoles=(wId,roles)=>{
     setWorkers(p=>p.map(w=>w.id===wId?{...w,roles}:w));
     swrite(sb.from('workers').update({roles}).eq('id',wId));
@@ -389,7 +402,7 @@ function App(){
   const adminNav=[{id:"today",label:"Today"},{id:"schedule",label:"Schedule"},{id:"staff",label:"Staff",badge:conf.length},{id:"requests",label:"Requests",badge:pendingR},{id:"reports",label:"Reports"},{id:"settings",label:"Settings"}];
   const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"notifications",label:"Notifications",badge:unread}];
   const nav=effectiveUser.role==="overseer"?adminNav:workerNav;
-  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updSnackShackOpen,updWorkerRoles,updWorkerPayRate};
+  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updSnackShackOpen,updWorkerRoles,updWorkerPayRate,addWorker};
   return R("div",{className:"app"},
     R("div",{className:"topbar"},
       R("div",{className:"logo"},"Field",R("span",null,"Sync")),
