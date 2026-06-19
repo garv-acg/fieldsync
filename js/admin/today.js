@@ -27,7 +27,11 @@ function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf
     ),
     conf.length>0&&R("div",{className:"conf-banner"},
       R("div",{className:"conf-banner-title"},"⚠ "+conf.length+" umpire conflict"+(conf.length>1?"s":"")+" detected"),
-      conf.map((c,i)=>R("div",{key:i,style:{fontSize:12,marginTop:2}},c.worker?.name+" is double-booked on "+c.games[0].date+" at "+c.games[0].time+" ("+c.games.map(g=>g.division).join(" & ")+")"))
+      conf.map((c,i)=>R("div",{key:i,style:{fontSize:12,marginTop:2}},
+        c.type==="umpire"
+          ? c.worker?.name+" is double-booked on "+c.games[0].date+" at "+c.games[0].time+" ("+c.games.map(g=>g.division).join(" & ")+")"
+          : c.worker?.name+" is assigned to multiple locations on "+c.date
+      ))
     ),
     R("div",{className:"metrics"},
       R("div",{className:"metric"},R("div",{className:"metric-label"},"Games"),R("div",{className:"metric-val"},games.length),R("div",{className:"metric-sub"},games.filter(g=>g.status==="scheduled").length+" scheduled")),

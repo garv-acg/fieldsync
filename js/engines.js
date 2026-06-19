@@ -33,7 +33,7 @@ function autoSched(games,workers,da,requests){
   const sorted=[...ug].sort((a,b)=>(isDual(b.division)?1:0)-(isDual(a.division)?1:0));
   sorted.forEach(g=>{
     if(g.status!=="scheduled")return;
-    const avail=umps.filter(u=>wa(u,g.date,reqs)&&(!uu[u.id]||!uu[u.id].has(g.date)));
+    const avail=umps.filter(u=>wa(u,g.date,reqs,"umpire")&&(!uu[u.id]||!uu[u.id].has(g.date)));
     const av=pickBest(avail,umpShifts);
     if(g.ump1===NONE&&av.length>0){
       const p=av.shift();g.ump1=p.id;
@@ -59,7 +59,7 @@ function autoSched(games,workers,da,requests){
     if(!nda[key])nda[key]={fieldCrew:[],concessions:[]};
     const ex=nda[key].fieldCrew||[],need=FC-ex.length;
     if(need>0){
-      const avail=fw.filter(u=>wa(u,date,reqs)&&!ex.includes(u.id)&&(!fu[u.id]||!fu[u.id].has(date)));
+      const avail=fw.filter(u=>wa(u,date,reqs,"field")&&!ex.includes(u.id)&&(!fu[u.id]||!fu[u.id].has(date)));
       pickBest(avail,fwShifts).slice(0,need).forEach(u=>{
         ex.push(u.id);if(!fu[u.id])fu[u.id]=new Set();fu[u.id].add(date);fwShifts[u.id]=(fwShifts[u.id]||0)+1;
       });
@@ -67,7 +67,7 @@ function autoSched(games,workers,da,requests){
     }
     const ec=nda[key].concessions||[];
     if(ec.length===0){
-      const avail=cw.filter(u=>wa(u,date,reqs)&&(!cu[u.id]||!cu[u.id].has(date)));
+      const avail=cw.filter(u=>wa(u,date,reqs,"concessions")&&(!cu[u.id]||!cu[u.id].has(date)));
       pickBest(avail,cwShifts).slice(0,3).forEach(u=>{
         ec.push(u.id);if(!cu[u.id])cu[u.id]=new Set();cu[u.id].add(date);cwShifts[u.id]=(cwShifts[u.id]||0)+1;
       });

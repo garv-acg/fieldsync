@@ -17,7 +17,7 @@ function getDragger(date,locId,da,workers,overrides,requests){
 }
 
 // ── Supabase row <-> app shape converters ──────────────────────────
-function rowToWorker(r){return{id:r.id,name:r.name,email:r.email,password:r.password,role:r.role,avail:r.avail||[],yearsExp:r.years_exp||0,phone:r.phone||"",roles:r.roles||null,payRates:r.pay_rates||{}}}
+function rowToWorker(r){return{id:r.id,name:r.name,email:r.email,password:r.password,role:r.role,avail:r.avail||[],availByRole:r.avail_by_role||{},yearsExp:r.years_exp||0,phone:r.phone||"",roles:r.roles||null,payRates:r.pay_rates||{}}}
 function rowToLoc(r){return{id:r.id,name:r.name,fields:r.fields||[]}}
 function rowToGame(r){return{id:r.id,locId:r.loc_id,field:r.field,division:r.division,date:r.date,time:r.time,home:r.home,away:r.away,status:r.status,ump1:r.ump1==null?NONE:r.ump1,ump2:r.ump2==null?NONE:r.ump2}}
 function rowToReq(r){return{id:r.id,type:r.type,workerId:r.worker_id,date:r.date,dateStart:r.date_start,dateEnd:r.date_end,locId:r.loc_id,role:r.role,label:r.label,reason:r.reason,claimedBy:r.claimed_by,status:r.status,created:r.created}}
@@ -346,6 +346,11 @@ function App(){
   const updAvail=(wId,avail)=>{
     setWorkers(p=>p.map(w=>w.id===wId?{...w,avail}:w));
     swrite(sb.from('workers').update({avail}).eq('id',wId));
+  };
+  const updAvailByRole=(wId,role,days)=>{
+    setWorkers(p=>p.map(w=>w.id===wId?{...w,availByRole:{...w.availByRole,[role]:days}}:w));
+    const cur=workers.find(w=>w.id===wId)?.availByRole||{};
+    swrite(sb.from('workers').update({avail_by_role:{...cur,[role]:days}}).eq('id',wId));
     showToast("Saved","s");
   };
   const importCSV=csv=>{
@@ -358,27 +363,30 @@ function App(){
 
   if(!loaded)return R("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#9BA3BF",fontSize:14}},"Loading FieldSync…");
   if(!user)return R(Login,{onLogin:u=>{setUser(u);setView(u.role==="overseer"?"today":"worker_home")}});
-  const myNotifs=user.role==="overseer"?notifs:notifs.filter(n=>n.workerId===user.id||n.workerId===0&&false);
+  // Merge live worker record so multi-role assignments set by admin are always reflected.
+  // Only overwrite fields that are non-null in the live record, so seed roles survive when the DB column doesn't exist yet.
+  const effectiveUser=user.role==="overseer"?user:(()=>{const live=workers.find(w=>w.id===user.id)||{};const merged={...user};Object.entries(live).forEach(([k,v])=>{if(v!=null)merged[k]=v});return merged;})();
+  const myNotifs=effectiveUser.role==="overseer"?notifs:notifs.filter(n=>n.workerId===effectiveUser.id||n.workerId===0&&false);
   const unread=myNotifs.filter(n=>!n.read).length,pendingR=requests.filter(r=>r.status==="pending"||r.status==="pending_approval").length;
   const adminNav=[{id:"today",label:"Today"},{id:"schedule",label:"Schedule"},{id:"staff",label:"Staff",badge:conf.length},{id:"requests",label:"Requests",badge:pendingR},{id:"reports",label:"Reports"},{id:"settings",label:"Settings"}];
   const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"notifications",label:"Notifications",badge:unread}];
-  const nav=user.role==="overseer"?adminNav:workerNav;
-  const sp={user,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updWorkerRoles,updWorkerPayRate};
+  const nav=effectiveUser.role==="overseer"?adminNav:workerNav;
+  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updWorkerRoles,updWorkerPayRate};
   return R("div",{className:"app"},
     R("div",{className:"topbar"},
       R("div",{className:"logo"},"Field",R("span",null,"Sync")),
       R("div",{style:{display:"flex",alignItems:"center",gap:12}},
         conf.length>0&&R("span",{style:{background:"#3D1A1A",color:"#F09090",border:"1px solid #E05555",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"},onClick:()=>setView("staff")},"⚠ "+conf.length+" conflict"+(conf.length>1?"s":"")),
         R("span",{style:{position:"relative",cursor:"pointer",fontSize:18,lineHeight:1},onClick:()=>setView("notifications")},"🔔",unread>0&&R("span",{style:{position:"absolute",top:-4,right:-6,background:"#E05555",color:"#fff",borderRadius:"50%",fontSize:9,fontWeight:700,minWidth:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}},unread)),
-        R("span",{className:"badge "+(user.role==="overseer"?"b-blue":"b-green")},user.role==="overseer"?"Admin":rl(user.role)),
-        R("span",{style:{fontSize:13,fontWeight:600}},user.name),
+        R("span",{className:"badge "+(effectiveUser.role==="overseer"?"b-blue":"b-green")},effectiveUser.role==="overseer"?"Admin":rl(effectiveUser.role)),
+        R("span",{style:{fontSize:13,fontWeight:600}},effectiveUser.name),
         R("button",{className:"btn btn-sm",onClick:()=>setUser(null)},"Sign out")
       )
     ),
     R("div",{className:"layout"},
       R("div",{className:"sidebar"},
         nav.map(item=>R("div",{key:item.id,className:"nav-item"+(view===item.id?" active":""),onClick:()=>setView(item.id)},item.label,item.badge>0&&R("span",{className:"nav-badge"},item.badge))),
-        R("div",{className:"nav-bottom"},R("div",{className:"nav-item",style:{fontSize:12,color:"#6B7394"}},user.name))
+        R("div",{className:"nav-bottom"},R("div",{className:"nav-item",style:{fontSize:12,color:"#6B7394"}},effectiveUser.name))
       ),
       R("div",{className:"content"},
         view==="today"&&R(TodayView,sp),

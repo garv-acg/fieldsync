@@ -13,8 +13,11 @@ const isDual=d=>DUAL.includes(d);
 const dk=(date,locId)=>date+"|"+locId;
 const wkKey=date=>{const d=new Date(date+"T12:00:00"),m=new Date(d);m.setDate(d.getDate()-d.getDay());return m.toISOString().slice(0,10)};
 const hasRole=(w,role)=>(w.roles&&w.roles.length?w.roles:[w.role]).includes(role);
-const wa=(w,date,requests)=>{
-  if(!w.avail.includes(WDAYS[new Date(date+"T12:00:00").getDay()]))return false;
+const wa=(w,date,requests,role)=>{
+  const dow=WDAYS[new Date(date+"T12:00:00").getDay()];
+  const avail=role&&w.availByRole&&w.availByRole[role]&&w.availByRole[role].length
+    ?w.availByRole[role]:w.avail||[];
+  if(!avail.includes(dow))return false;
   if(!requests)return true;
   return!requests.some(r=>{
     if(r.workerId!==w.id||r.status!=="approved")return false;
@@ -28,7 +31,7 @@ const normDiv=raw=>{if(!raw)return"AA";if(raw.toLowerCase().includes("9-11")||ra
 const PAY_DEFAULTS={umpireRate:45,fieldRate:34,concessionsRate:17};
 const LOCS=[{id:"sc",name:"Spring Creek",fields:["Field 1","Field 2","Field 3"]},{id:"mv",name:"Mission Viejo",fields:["Field 1","Field 2","Field 3","Field 4"]}];
 const WORKERS=[
-  {id:1,name:"Jordan Lee",role:"umpire",email:"jordan@crew.com",avail:["Mon","Wed","Fri","Sat","Sun"],password:"ump"},
+  {id:1,name:"Jordan Lee",role:"umpire",roles:["umpire","field","concessions"],email:"jordan@crew.com",avail:["Mon","Wed","Fri","Sat","Sun"],password:"ump"},
   {id:2,name:"Sam Rivera",role:"umpire",email:"sam@crew.com",avail:["Tue","Thu","Sat","Sun"],password:"ump2"},
   {id:3,name:"Riley Stone",role:"umpire",email:"riley@crew.com",avail:["Wed","Thu","Sat","Sun"],password:"ump3"},
   {id:4,name:"Taylor Brooks",role:"umpire",email:"taylor@crew.com",avail:["Mon","Tue","Fri","Sat"],password:"ump4"},
@@ -48,8 +51,10 @@ const INIT_GAMES=[
   {id:1005,locId:"sc",field:"Field 3",division:"AA",date:"2026-06-15",time:"9:00 AM",home:"Indians",away:"Jets",status:"scheduled",ump1:NONE,ump2:NONE},
   {id:1006,locId:"mv",field:"Field 2",division:"Tee Ball",date:"2026-06-15",time:"8:00 AM",home:"Kings",away:"Lions",status:"scheduled",ump1:NONE,ump2:NONE},
   {id:1007,locId:"sc",field:"Field 2",division:"Majors",date:"2026-06-13",time:"9:00 AM",home:"Sox",away:"Tigers",status:"scheduled",ump1:4,ump2:NONE},
+  {id:1008,locId:"sc",field:"Field 1",division:"AAA",date:"2026-06-21",time:"10:00 AM",home:"Angels",away:"Bears",status:"scheduled",ump1:1,ump2:2},
+  {id:1009,locId:"mv",field:"Field 2",division:"Majors",date:"2026-06-22",time:"1:00 PM",home:"Cardinals",away:"Eagles",status:"scheduled",ump1:1,ump2:3},
 ];
-const INIT_DA={"2026-06-13|sc":{fieldCrew:[5,6,7,8],concessions:[9,10]},"2026-06-14|mv":{fieldCrew:[6,8],concessions:[10,11]},"2026-06-14|sc":{fieldCrew:[5,7],concessions:[9]}};
+const INIT_DA={"2026-06-13|sc":{fieldCrew:[1,5,6,7],concessions:[1,9,10]},"2026-06-14|mv":{fieldCrew:[1,6,8],concessions:[10,11]},"2026-06-14|sc":{fieldCrew:[5,7],concessions:[1,9]},"2026-06-21|sc":{fieldCrew:[1,5,6,7],concessions:[1,9,10]},"2026-06-22|mv":{fieldCrew:[1,6,8],concessions:[9,10]}};
 const INIT_PUB=new Set(["2026-06-08"]);
 const INIT_RSVP={[rsvpKey(1,"2026-06-13","sc")]:"confirmed",[rsvpKey(5,"2026-06-13","sc")]:"confirmed"};
 const INIT_REQUESTS=[{id:201,type:"time_off",workerId:1,dateStart:"2026-06-20",dateEnd:"2026-06-20",reason:"Family event",status:"pending",created:"2026-06-05"}];
