@@ -1,13 +1,19 @@
-function getDragger(date,locId,da,workers,overrides){
+function getDragger(date,locId,da,workers,overrides,requests){
   const k=dk(date,locId);
   if(overrides&&overrides[k]!=null)return overrides[k];
   const crew=(da[k]||{}).fieldCrew||[];
   if(!crew.length)return null;
+  const reqs=requests||[];
   const sorted=[...crew].sort((a,b)=>{
     const wa=workers.find(w=>w.id===a),wb=workers.find(w=>w.id===b);
     return (wb?.yearsExp||0)-(wa?.yearsExp||0);
   });
-  return sorted[0];
+  // Skip anyone with approved time off that day
+  const available=sorted.filter(id=>{
+    const w=workers.find(x=>x.id===id);
+    return w&&wa(w,date,reqs);
+  });
+  return available[0]??sorted[0];
 }
 
 // ── Supabase row <-> app shape converters ──────────────────────────
@@ -102,7 +108,7 @@ function App(){
   const conf=useMemo(()=>detConf(games,workers,da),[games,workers,da]);
 
   const runAuto=()=>{
-    const r=autoSched(games,workers,da);
+    const r=autoSched(games,workers,da,requests);
     setGames(r.games);setDA(r.da);
     swrite(sb.from('games').upsert(r.games.map(g=>({id:g.id,loc_id:g.locId,field:g.field,division:g.division,date:g.date,time:g.time,home:g.home,away:g.away,status:g.status,ump1:g.ump1===NONE?null:g.ump1,ump2:g.ump2===NONE?null:g.ump2}))));
     swrite(sb.from('day_assignments').upsert(Object.entries(r.da).map(([k,v])=>{const[date,locId]=k.split("|");return{date,loc_id:locId,field_crew:v.fieldCrew||[],concessions:v.concessions||[]}})));
@@ -150,7 +156,7 @@ function App(){
       }
       const replacements=workers.filter(w2=>{
         if(w2.role!==w?.role||w2.id===wId)return false;
-        if(!wa(w2,date))return false;
+        if(!wa(w2,date,requests))return false;
         if(w?.role==="umpire"){
           return!games.some(g2=>g2.status==="scheduled"&&g2.date===date&&(g2.ump1===w2.id||g2.ump2===w2.id));
         }
@@ -338,7 +344,7 @@ function App(){
   const adminNav=[{id:"today",label:"Today"},{id:"schedule",label:"Schedule"},{id:"staff",label:"Staff",badge:conf.length},{id:"requests",label:"Requests",badge:pendingR},{id:"reports",label:"Reports"},{id:"settings",label:"Settings"}];
   const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"notifications",label:"Notifications",badge:unread}];
   const nav=user.role==="overseer"?adminNav:workerNav;
-  const sp={user,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders};
+  const sp={user,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders};
   return R("div",{className:"app"},
     R("div",{className:"topbar"},
       R("div",{className:"logo"},"Field",R("span",null,"Sync")),

@@ -12,7 +12,16 @@ const rb=r=>r==="umpire"?"b-purple":r==="field"?"b-green":"b-amber";
 const isDual=d=>DUAL.includes(d);
 const dk=(date,locId)=>date+"|"+locId;
 const wkKey=date=>{const d=new Date(date+"T12:00:00"),m=new Date(d);m.setDate(d.getDate()-d.getDay());return m.toISOString().slice(0,10)};
-const wa=(w,date)=>w.avail.includes(WDAYS[new Date(date+"T12:00:00").getDay()]);
+const wa=(w,date,requests)=>{
+  if(!w.avail.includes(WDAYS[new Date(date+"T12:00:00").getDay()]))return false;
+  if(!requests)return true;
+  return!requests.some(r=>{
+    if(r.workerId!==w.id||r.status!=="approved")return false;
+    if(r.type!=="time_off"&&r.type!=="vacation")return false;
+    const start=r.dateStart||r.date,end=r.dateEnd||r.dateStart||r.date;
+    return date>=start&&date<=end;
+  });
+};
 const rsvpKey=(wId,date,locId)=>`${wId}_${date}_${locId}`;
 const normDiv=raw=>{if(!raw)return"AA";if(raw.toLowerCase().includes("9-11")||raw.toLowerCase().includes("district"))return"Majors";return{"Minors AA":"AA","Minors AAA":"AAA","Minors A":"A","Teeball":"Tee Ball","T-Ball":"Tee Ball","8U":"Softball 8U","10U":"Softball 10U","12U":"Softball 12U"}[raw]||raw};
 const LOCS=[{id:"sc",name:"Spring Creek",fields:["Field 1","Field 2","Field 3"]},{id:"mv",name:"Mission Viejo",fields:["Field 1","Field 2","Field 3","Field 4"]}];

@@ -1,18 +1,49 @@
-function autoSched(games,workers,da){
+function autoSched(games,workers,da,requests){
   const nda={...da},ug=games.map(g=>({...g}));
-  // Sort umpires by experience descending so seniors fill dual (higher) divisions first
-  const umps=workers.filter(w=>w.role==="umpire").slice().sort((a,b)=>(b.yearsExp||0)-(a.yearsExp||0));
-  const fw=workers.filter(w=>w.role==="field"),cw=workers.filter(w=>w.role==="concessions");
+  const reqs=requests||[];
+
+  // Count existing season shifts per worker for load balancing
+  const umpShifts={},fwShifts={},cwShifts={};
+  ug.forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE)umpShifts[u]=(umpShifts[u]||0)+1})});
+  Object.values(da).forEach(v=>{
+    (v.fieldCrew||[]).forEach(id=>{fwShifts[id]=(fwShifts[id]||0)+1});
+    (v.concessions||[]).forEach(id=>{cwShifts[id]=(cwShifts[id]||0)+1});
+  });
+
+  // Sort: most senior first; break ties by fewest existing shifts
+  const byExp=(a,b)=>{
+    const ed=(b.yearsExp||0)-(a.yearsExp||0);
+    return ed!==0?ed:0; // seniority primary; shift count applied per-pick below
+  };
+  const pickBest=(candidates,shiftMap)=>{
+    return candidates.slice().sort((a,b)=>{
+      const ed=(b.yearsExp||0)-(a.yearsExp||0);
+      if(ed!==0)return ed;
+      return(shiftMap[a.id]||0)-(shiftMap[b.id]||0);
+    });
+  };
+
+  const umps=workers.filter(w=>w.role==="umpire");
+  const fw=workers.filter(w=>w.role==="field");
+  const cw=workers.filter(w=>w.role==="concessions");
   const uu={};
   ug.forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE){if(!uu[u])uu[u]=new Set();uu[u].add(g.date)}})});
 
-  // Process dual-umpire games first so most-senior umps are assigned there
+  // Process dual-umpire games first so most-senior umps fill those slots
   const sorted=[...ug].sort((a,b)=>(isDual(b.division)?1:0)-(isDual(a.division)?1:0));
   sorted.forEach(g=>{
     if(g.status!=="scheduled")return;
-    const av=umps.filter(u=>wa(u,g.date)&&(!uu[u.id]||!uu[u.id].has(g.date)));
-    if(g.ump1===NONE&&av.length>0){const p=av.shift();g.ump1=p.id;if(!uu[p.id])uu[p.id]=new Set();uu[p.id].add(g.date)}
-    if(isDual(g.division)&&g.ump2===NONE){const p=av.find(u=>u.id!==g.ump1)||av[0];if(p){g.ump2=p.id;if(!uu[p.id])uu[p.id]=new Set();uu[p.id].add(g.date)}}
+    const avail=umps.filter(u=>wa(u,g.date,reqs)&&(!uu[u.id]||!uu[u.id].has(g.date)));
+    const av=pickBest(avail,umpShifts);
+    if(g.ump1===NONE&&av.length>0){
+      const p=av.shift();g.ump1=p.id;
+      if(!uu[p.id])uu[p.id]=new Set();uu[p.id].add(g.date);
+      umpShifts[p.id]=(umpShifts[p.id]||0)+1;
+    }
+    if(isDual(g.division)&&g.ump2===NONE){
+      const p=av.find(u=>u.id!==g.ump1);
+      if(p){g.ump2=p.id;if(!uu[p.id])uu[p.id]=new Set();uu[p.id].add(g.date);umpShifts[p.id]=(umpShifts[p.id]||0)+1}
+    }
   });
 
   const gdays=new Set();
@@ -27,9 +58,21 @@ function autoSched(games,workers,da){
     const[date,locId]=key.split("|");
     if(!nda[key])nda[key]={fieldCrew:[],concessions:[]};
     const ex=nda[key].fieldCrew||[],need=FC-ex.length;
-    if(need>0){fw.filter(u=>wa(u,date)&&!ex.includes(u.id)&&(!fu[u.id]||!fu[u.id].has(date))).slice(0,need).forEach(u=>{ex.push(u.id);if(!fu[u.id])fu[u.id]=new Set();fu[u.id].add(date)});nda[key]={...nda[key],fieldCrew:ex}}
+    if(need>0){
+      const avail=fw.filter(u=>wa(u,date,reqs)&&!ex.includes(u.id)&&(!fu[u.id]||!fu[u.id].has(date)));
+      pickBest(avail,fwShifts).slice(0,need).forEach(u=>{
+        ex.push(u.id);if(!fu[u.id])fu[u.id]=new Set();fu[u.id].add(date);fwShifts[u.id]=(fwShifts[u.id]||0)+1;
+      });
+      nda[key]={...nda[key],fieldCrew:ex};
+    }
     const ec=nda[key].concessions||[];
-    if(ec.length===0){cw.filter(u=>wa(u,date)&&(!cu[u.id]||!cu[u.id].has(date))).slice(0,3).forEach(u=>{ec.push(u.id);if(!cu[u.id])cu[u.id]=new Set();cu[u.id].add(date)});nda[key]={...nda[key],concessions:ec}}
+    if(ec.length===0){
+      const avail=cw.filter(u=>wa(u,date,reqs)&&(!cu[u.id]||!cu[u.id].has(date)));
+      pickBest(avail,cwShifts).slice(0,3).forEach(u=>{
+        ec.push(u.id);if(!cu[u.id])cu[u.id]=new Set();cu[u.id].add(date);cwShifts[u.id]=(cwShifts[u.id]||0)+1;
+      });
+      nda[key]={...nda[key],concessions:ec};
+    }
   });
   return{games:ug,da:nda};
 }
