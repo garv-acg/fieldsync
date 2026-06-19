@@ -164,7 +164,8 @@ function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,loc
     // ── Rate settings panel ──
     R("div",{className:"card",style:{marginBottom:16}},
       R("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:()=>setShowRates(p=>!p)},
-        R("div",{style:{fontWeight:700,fontSize:14}},"Pay Rate Settings"),
+        R("div",{style:{fontWeight:700,fontSize:14}},"Default pay rates"),
+      R("div",{style:{fontSize:11,color:"#6B7394",marginTop:2}},"Applied when a worker has no individual rate set"),
         R("span",{style:{color:"#6B7394",fontSize:12}},showRates?"▲ Hide":"▼ Show")
       ),
       showRates&&R("div",{style:{marginTop:16,display:"flex",gap:32,flexWrap:"wrap"}},
