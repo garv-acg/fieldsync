@@ -1,7 +1,7 @@
 function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAuto,setModal,setUmp,updDA,updSnackShackOpen,setGS,rainout,getDragger,setDraggerOverride,draggerOverrides,sendReminders}){
   const[lf,setLf]=useState("all");
-  const dates=[...new Set(games.map(g=>g.date))].sort();
-  const byWk={};dates.forEach(d=>{const w=wkKey(d);if(!byWk[w])byWk[w]=[];if(!byWk[w].includes(d))byWk[w].push(d)});
+  const dates=[...new Set(games.map(g=>g.date).filter(d=>wkKey(d)))].sort();
+  const byWk={};dates.forEach(d=>{const w=wkKey(d);if(w&&!byWk[w])byWk[w]=[];if(w&&!byWk[w].includes(d))byWk[w].push(d)});
   const fl=lf==="all"?locs:locs.filter(l=>l.id===lf);
   const cmap=gameConflictMap(conf);
   return R("div",null,

@@ -7,7 +7,7 @@ function effectiveRate(w,role,payConfig){
   return role==="umpire"?payConfig.umpireRate:role==="field"?payConfig.fieldRate:payConfig.concessionsRate;
 }
 
-function computePayRows(workers,games,da,payConfig,filterDates){
+function computePayRows(workers,games,da,payConfig,filterDates,locs){
   // filterDates: Set of date strings, or null for all
   const inRange=d=>!filterDates||filterDates.has(d);
   return workers.filter(w=>w.role!=="overseer").map(w=>{
@@ -24,7 +24,7 @@ function computePayRows(workers,games,da,payConfig,filterDates){
       entries.push({role:"field",label:"Field crew",count:shifts.length,hours:null,rate,total:shifts.length*rate});
     }
     if(roles.includes("concessions")){
-      const shifts=Object.entries(da).filter(([k,v])=>(v.concessions||[]).includes(w.id)&&inRange(k.split("|")[0]));
+      const shifts=Object.entries(da).filter(([k,v])=>{const[d,locId]=k.split("|");const loc=(locs||[]).find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(w.id)&&inRange(d)});
       const rate=effectiveRate(w,"concessions",payConfig);
       const hours=shifts.reduce((sum,[k,v])=>sum+((v.concessionsHours||{})[w.id]||0),0);
       entries.push({role:"concessions",label:"Concessions",count:shifts.length,hours,rate,total:hours*rate});
@@ -87,14 +87,14 @@ function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,loc
   const weekDates=()=>{const s=new Date(weekStart+"T12:00:00"),out=new Set();for(let i=0;i<7;i++){const d=new Date(s);d.setDate(s.getDate()+i);out.add(d.toISOString().slice(0,10))}return out};
 
   const filterDates=scope==="week"?weekDates():null;
-  const rows=computePayRows(workers,games,da,payConfig,filterDates);
+  const rows=computePayRows(workers,games,da,payConfig,filterDates,locs);
   const grandTotal=rows.reduce((s,r)=>s+r.grandTotal,0);
 
   const fmtCur=n=>"$"+n.toFixed(2);
   const fmtDate=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 
   // Concessions hours logger (week scope only)
-  const concDays=scope==="week"?Object.entries(da).filter(([k])=>{const d=k.split("|")[0];return filterDates.has(d)&&(da[k].concessions||[]).length>0}):[];
+  const concDays=scope==="week"?Object.entries(da).filter(([k])=>{const[d,locId]=k.split("|");const loc=(locs||[]).find(l=>l.id===locId);return loc?.hasSnackShack&&filterDates.has(d)&&(da[k].concessions||[]).length>0}):[];
 
   const saveRates=()=>{updPayConfig({umpireRate:+rateInputs.umpireRate||0,fieldRate:+rateInputs.fieldRate||0,concessionsRate:+rateInputs.concessionsRate||0})};
 

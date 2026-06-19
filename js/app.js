@@ -359,11 +359,24 @@ function App(){
     showToast("Saved","s");
   };
   const importCSV=csv=>{
-    const lines=csv.trim().split("\n"),ng=[];
-    for(let i=1;i<lines.length;i++){const c=lines[i].split(",").map(x=>x.replace(/"/g,"").trim());if(c.length<5)continue;ng.push({id:Date.now()+i,locId:c[0].toLowerCase().includes("spring")?"sc":"mv",field:c[1]||"Field 1",division:normDiv(c[2]),date:c[3],time:c[4]||"9:00 AM",home:c[6]||"",away:c[5]||"",status:"scheduled",ump1:NONE,ump2:NONE})}
+    // Robust CSV parser — handles quoted fields containing commas
+    const parseRow=line=>{const cols=[];let cur="",inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){inQ=!inQ}else if(ch===","&&!inQ){cols.push(cur.trim());cur=""}else{cur+=ch}}cols.push(cur.trim());return cols};
+    const isValidDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(d)&&!isNaN(new Date(d+"T12:00:00").getTime());
+    const lines=csv.trim().split(/\r?\n/),ng=[],skipped=[];
+    for(let i=1;i<lines.length;i++){
+      if(!lines[i].trim())continue;
+      const c=parseRow(lines[i]);
+      if(c.length<4){skipped.push(i+1);continue;}
+      const date=c[3]?.replace(/"/g,"").trim();
+      if(!isValidDate(date)){skipped.push(i+1);continue;}
+      const locRaw=(c[0]||"").toLowerCase();
+      ng.push({id:Date.now()+i,locId:locRaw.includes("spring")||locRaw.includes("sc")?"sc":"mv",field:c[1]||"Field 1",division:normDiv(c[2]||""),date,time:c[4]||"9:00 AM",away:c[5]||"",home:c[6]||"",status:"scheduled",ump1:NONE,ump2:NONE});
+    }
+    if(ng.length===0){showToast("No valid rows found — check date format (YYYY-MM-DD)","e");return;}
     setGames(p=>[...p,...ng]);
     swrite(sb.from('games').insert(ng.map(g=>({id:g.id,loc_id:g.locId,field:g.field,division:g.division,date:g.date,time:g.time,home:g.home,away:g.away,status:g.status,ump1:null,ump2:null}))));
-    showToast("Imported "+ng.length+" games","s");setModal(null);
+    const msg="Imported "+ng.length+" game"+(ng.length>1?"s":"")+(skipped.length?" ("+skipped.length+" rows skipped — bad date/format)":"");
+    showToast(msg,"s");setModal(null);
   };
 
   if(!loaded)return R("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#9BA3BF",fontSize:14}},"Loading FieldSync…");

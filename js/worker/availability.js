@@ -1,6 +1,6 @@
 function AvailView({user,workers,updAvailByRole,updYears,updPhone}){
   const w=workers.find(x=>x.id===user.id);
-  const myRoles=(w?.roles&&w.roles.length)?w.roles:[w?.role||user.role];
+  const myRoles=(w?.roles&&w.roles.length)?w.roles:(user.roles&&user.roles.length)?user.roles:[w?.role||user.role];
   const[activeRole,setActiveRole]=useState(myRoles[0]);
   const[yrs,setYrs]=useState(w?.yearsExp||0);
   const[phone,setPhone]=useState(w?.phone||"");

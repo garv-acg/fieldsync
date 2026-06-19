@@ -6,7 +6,7 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp}){
   const gw=date=>{
     const mg=hasRole(user,"umpire")?games.filter(g=>g.date===date&&g.status==="scheduled"&&(g.ump1===user.id||g.ump2===user.id)):[];
     const fieldLocs=hasRole(user,"field")?locs.filter(loc=>(da[dk(date,loc.id)]?.fieldCrew||[]).includes(user.id)):[];
-    const concLocs=hasRole(user,"concessions")?locs.filter(loc=>(da[dk(date,loc.id)]?.concessions||[]).includes(user.id)):[];
+    const concLocs=hasRole(user,"concessions")?locs.filter(loc=>loc.hasSnackShack&&(da[dk(date,loc.id)]?.concessions||[]).includes(user.id)):[];
     return{games:mg,fieldLocs,concLocs};
   };
   const sw=gw(sel),sp=isPub(sel);

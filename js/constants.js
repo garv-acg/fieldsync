@@ -11,7 +11,7 @@ const rl=r=>r==="umpire"?"Umpire":r==="field"?"Field Crew":"Concessions";
 const rb=r=>r==="umpire"?"b-purple":r==="field"?"b-green":"b-amber";
 const isDual=d=>DUAL.includes(d);
 const dk=(date,locId)=>date+"|"+locId;
-const wkKey=date=>{const d=new Date(date+"T12:00:00"),m=new Date(d);m.setDate(d.getDate()-d.getDay());return m.toISOString().slice(0,10)};
+const wkKey=date=>{if(!date||typeof date!=="string")return null;const d=new Date(date+"T12:00:00");if(isNaN(d.getTime()))return null;const m=new Date(d);m.setDate(d.getDate()-d.getDay());return m.toISOString().slice(0,10)};
 const hasRole=(w,role)=>(w.roles&&w.roles.length?w.roles:[w.role]).includes(role);
 const wa=(w,date,requests,role)=>{
   const dow=WDAYS[new Date(date+"T12:00:00").getDay()];

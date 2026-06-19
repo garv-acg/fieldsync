@@ -8,7 +8,7 @@ function MyShifts({user,games,da,workers,locs,isPub,getRsvp,setRsvpStatus,reques
 
   const allG=hasRole(user,"umpire")?games.filter(g=>g.status==="scheduled"&&(g.ump1===user.id||g.ump2===user.id)).sort((a,b)=>new Date(a.date)-new Date(b.date)):[];
   const allField=hasRole(user,"field")?Object.entries(da).filter(([,v])=>(v.fieldCrew||[]).includes(user.id)).sort((a,b)=>a[0].localeCompare(b[0])):[];
-  const allConc=hasRole(user,"concessions")?Object.entries(da).filter(([,v])=>(v.concessions||[]).includes(user.id)).sort((a,b)=>a[0].localeCompare(b[0])):[];
+  const allConc=hasRole(user,"concessions")?Object.entries(da).filter(([k,v])=>{const locId=k.split("|")[1];const loc=locs.find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(user.id)}).sort((a,b)=>a[0].localeCompare(b[0])):[];
 
   const myG=showPast?allG:allG.filter(g=>g.date>=today);
   const myField=showPast?allField:allField.filter(([k])=>k.split("|")[0]>=today);
