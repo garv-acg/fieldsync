@@ -10,8 +10,8 @@ function ModalRouter(props){
   return null;
 }
 function GameModal({modal,locs,onClose,addGame,editGame}){
-  const g=modal.game||{};
-  const[f,setF]=useState({locId:g.locId||locs[0]?.id||"",field:g.field||locs[0]?.fields[0]||"",division:g.division||DIVS[0],date:g.date||modal.prefillDate||"",time:g.time||"6:00 PM",home:g.home||"",away:g.away||"",status:g.status||"scheduled",id:g.id});
+  const g=modal.game||modal.prefill||{};
+  const[f,setF]=useState({locId:g.locId||locs[0]?.id||"",field:g.field||locs[0]?.fields[0]||"",division:g.division||DIVS[0],date:g.date||modal.prefillDate||"",time:g.time||"6:00 PM",home:g.home||"",away:g.away||"",status:"scheduled",id:modal.game?.id});
   const loc=locs.find(l=>l.id===f.locId);
   const set=(k,v)=>setF(p=>({...p,[k]:v}));
   const hloc=nId=>{const nl=locs.find(l=>l.id===nId);setF(p=>({...p,locId:nId,field:nl?.fields[0]||""}))};

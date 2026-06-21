@@ -12,7 +12,7 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp}){
   };
   const sw=gw(sel),sp=isPub(sel);
   const hasAny=w=>w.games.length>0||w.fieldLocs.length>0||w.concLocs.length>0;
-  const next=wd.find(d=>hasAny(gw(d))&&d>=today);
+  const next=wd.find(d=>hasAny(gw(d))&&d>=today&&isPub(d));
 
   const myRoles=(user.roles&&user.roles.length)?user.roles:[user.role];
 
@@ -26,7 +26,7 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp}){
       )
     ),
     R("div",{className:"week-strip"},wd.map(date=>{
-      const w=gw(date),has=hasAny(w),d=new Date(date+"T12:00:00"),isSel=date===sel;
+      const w=gw(date),has=hasAny(w)&&isPub(date),d=new Date(date+"T12:00:00"),isSel=date===sel;
       return R("div",{key:date,className:"wday"+(has?" has":"")+(isSel?" sel":""),onClick:()=>setSel(date)},
         R("div",{className:"wd-n"},WDAYS[d.getDay()]),
         R("div",{className:"wd-d"},d.getDate()),

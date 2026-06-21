@@ -1,25 +1,53 @@
 function CalExportPicker({user,games,da,locs,isPub}){
   const[open,setOpen]=useState(false);
-  const opts=[
-    {id:"apple",label:"Apple Calendar",icon:"🍎",hint:"Downloads .ics — open to import"},
-    {id:"google",label:"Google Calendar",icon:"📆",hint:"Downloads .ics — import via gcal.com"},
-    {id:"outlook",label:"Outlook",icon:"📧",hint:"Downloads .ics — open to import"},
-  ];
-  const pick=target=>{
-    exportICS(user,games,da,locs,isPub,target);
-    setOpen(false);
+  const[subState,setSubState]=useState(null); // null | "loading" | {url} | "error"
+
+  const icsUrl=workerICSUrl(user.id);
+  const webcalUrl=icsUrl.replace("https://","webcal://");
+  const googleUrl="https://www.google.com/calendar/render?cid="+encodeURIComponent(webcalUrl);
+
+  const doPublish=async()=>{
+    setSubState("loading");
+    try{
+      await publishWorkerICS(user,games,da,locs,isPub);
+      setSubState({url:icsUrl});
+    }catch(e){
+      console.error("ICS publish failed",e);
+      setSubState("error");
+    }
   };
+
+  const dlOpts=[
+    {id:"apple",label:"Apple Calendar",icon:"🍎",hint:"Downloads .ics — open to add"},
+    {id:"google",label:"Google Calendar",icon:"📆",hint:"Downloads .ics — import at calendar.google.com"},
+    {id:"outlook",label:"Outlook",icon:"📧",hint:"Downloads .ics — open to add"},
+  ];
+
   return R("div",{style:{position:"relative"}},
-    R("button",{className:"btn btn-blue",onClick:()=>setOpen(p=>!p)},"📅 Add to calendar"),
-    open&&R("div",{style:{position:"absolute",right:0,top:"calc(100% + 6px)",background:"#181C27",border:"1px solid #2E3450",borderRadius:12,padding:8,zIndex:200,minWidth:220,boxShadow:"0 8px 32px rgba(0,0,0,.6)"}},
-      opts.map(o=>R("div",{key:o.id,onClick:()=>pick(o.id),style:{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 12px",borderRadius:8,cursor:"pointer",transition:"background .1s"},
+    R("button",{className:"btn btn-blue",onClick:()=>{setOpen(p=>!p);setSubState(null)}},"📅 Calendar"),
+    open&&R("div",{style:{position:"absolute",right:0,top:"calc(100% + 6px)",background:"#181C27",border:"1px solid #2E3450",borderRadius:12,padding:12,zIndex:200,minWidth:260,boxShadow:"0 8px 32px rgba(0,0,0,.6)"}},
+      R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",marginBottom:8,letterSpacing:.06},""},
+        "Subscribe (auto-updates)"
+      ),
+      subState==="loading"&&R("div",{style:{fontSize:13,color:"#9BA3BF",padding:"8px 0"}},"Generating link…"),
+      subState==="error"&&R("div",{style:{fontSize:12,color:"#F09090",padding:"8px 0"}},"Storage bucket not set up yet. Ask your manager."),
+      (!subState||subState==="error")&&R("button",{className:"btn btn-blue btn-sm",style:{width:"100%",marginBottom:4},onClick:doPublish},"🔗 Generate subscribe link"),
+      subState&&subState.url&&R("div",{style:{marginBottom:4}},
+        R("div",{style:{fontSize:11,color:"#7DDBA8",marginBottom:6}},"✓ Link ready — choose your app:"),
+        R("a",{href:webcalUrl,style:{display:"block",padding:"7px 10px",background:"#252A3D",borderRadius:7,color:"#E8ECF8",fontSize:13,textDecoration:"none",marginBottom:4,textAlign:"center"},""},"🍎 Add to Apple Calendar"),
+        R("a",{href:googleUrl,target:"_blank",style:{display:"block",padding:"7px 10px",background:"#252A3D",borderRadius:7,color:"#E8ECF8",fontSize:13,textDecoration:"none",marginBottom:4,textAlign:"center"},""},"📆 Add to Google Calendar"),
+        R("button",{className:"btn btn-sm",style:{width:"100%"},onClick:()=>{navigator.clipboard.writeText(webcalUrl).then(()=>alert("Copied! Paste into Outlook → Add calendar from internet"))}},"📧 Copy link for Outlook")
+      ),
+      R("div",{style:{borderTop:"1px solid #2E3450",margin:"10px 0 8px"}}),
+      R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",marginBottom:6,letterSpacing:.06},""},"One-time download"),
+      dlOpts.map(o=>R("div",{key:o.id,onClick:()=>{exportICS(user,games,da,locs,isPub,o.id);setOpen(false)},style:{display:"flex",gap:8,alignItems:"center",padding:"7px 8px",borderRadius:7,cursor:"pointer"},
         onMouseEnter:e=>e.currentTarget.style.background="#252A3D",
         onMouseLeave:e=>e.currentTarget.style.background="transparent",
       },
-        R("span",{style:{fontSize:20,lineHeight:1}},o.icon),
+        R("span",{style:{fontSize:16}},o.icon),
         R("div",null,
-          R("div",{style:{fontWeight:700,fontSize:13,color:"#E8ECF8"}},o.label),
-          R("div",{style:{fontSize:11,color:"#6B7394"}},o.hint)
+          R("div",{style:{fontSize:13,color:"#E8ECF8"}},o.label),
+          R("div",{style:{fontSize:10,color:"#6B7394"}},o.hint)
         )
       ))
     )
@@ -34,10 +62,10 @@ function MyShifts({user,games,da,workers,locs,isPub,getRsvp,setRsvpStatus,reques
   if(hasRole(user,"field"))userRoles.push("field");
   if(hasRole(user,"concessions"))userRoles.push("concessions");
 
-  const allG=hasRole(user,"umpire")?games.filter(g=>g.status==="scheduled"&&(g.ump1===user.id||g.ump2===user.id)).sort((a,b)=>new Date(a.date)-new Date(b.date)):[];
+  const allG=hasRole(user,"umpire")?games.filter(g=>g.status==="scheduled"&&(g.ump1===user.id||g.ump2===user.id)&&isPub(g.date)).sort((a,b)=>new Date(a.date)-new Date(b.date)):[];
   const hasGamesOn=(date,locId)=>games.some(g=>g.date===date&&g.locId===locId&&g.status==="scheduled");
-  const allField=hasRole(user,"field")?Object.entries(da).filter(([k,v])=>{const[date,locId]=k.split("|");return(v.fieldCrew||[]).includes(user.id)&&hasGamesOn(date,locId)}).sort((a,b)=>a[0].localeCompare(b[0])):[];
-  const allConc=hasRole(user,"concessions")?Object.entries(da).filter(([k,v])=>{const[date,locId]=k.split("|");const loc=locs.find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(user.id)&&hasGamesOn(date,locId)}).sort((a,b)=>a[0].localeCompare(b[0])):[];
+  const allField=hasRole(user,"field")?Object.entries(da).filter(([k,v])=>{const[date,locId]=k.split("|");return(v.fieldCrew||[]).includes(user.id)&&hasGamesOn(date,locId)&&isPub(date)}).sort((a,b)=>a[0].localeCompare(b[0])):[];
+  const allConc=hasRole(user,"concessions")?Object.entries(da).filter(([k,v])=>{const[date,locId]=k.split("|");const loc=locs.find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(user.id)&&hasGamesOn(date,locId)&&isPub(date)}).sort((a,b)=>a[0].localeCompare(b[0])):[];
 
   const myG=showPast?allG:allG.filter(g=>g.date>=today);
   const myField=showPast?allField:allField.filter(([k])=>k.split("|")[0]>=today);

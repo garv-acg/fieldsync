@@ -133,18 +133,15 @@ function SaturdayView({games,workers,da,locs,pub}){
 
 function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAuto,setModal,setUmp,updDA,updSnackShackOpen,setGS,rainout,getDragger,setDraggerOverride,draggerOverrides,sendReminders}){
   const[lf,setLf]=useState("all");
+  const[showPast,setShowPast]=useState(false);
   const todayWk=wkKey(new Date().toISOString().slice(0,10));
-  const wkRefs=React.useRef({});
-  const hasScrolled=React.useRef(false);
   const dates=[...new Set(games.map(g=>g.date).filter(d=>wkKey(d)))].sort();
   const byWk={};dates.forEach(d=>{const w=wkKey(d);if(w&&!byWk[w])byWk[w]=[];if(w&&!byWk[w].includes(d))byWk[w].push(d)});
   const fl=lf==="all"?locs:locs.filter(l=>l.id===lf);
   const cmap=gameConflictMap(conf);
-  useEffect(()=>{
-    if(hasScrolled.current||!games.length)return;
-    const el=wkRefs.current[todayWk];
-    if(el){el.scrollIntoView({behavior:"smooth",block:"start"});hasScrolled.current=true;}
-  },[games.length]);
+  const allWks=Object.entries(byWk).sort((a,b)=>a[0].localeCompare(b[0]));
+  const pastWks=allWks.filter(([ws])=>ws<todayWk);
+  const upcomingWks=allWks.filter(([ws])=>ws>=todayWk);
   return R("div",null,
     R("div",{className:"ph"},
       R("div",null,R("h2",null,"Schedule"),R("p",null,"Build in draft — publish to notify workers")),
@@ -159,10 +156,44 @@ function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAu
       locs.map(l=>R("button",{key:l.id,className:"btn btn-sm"+(lf===l.id?" btn-blue":""),onClick:()=>setLf(l.id)},l.name))
     ),
     conf.length>0&&R("div",{className:"conf-banner",style:{marginBottom:14}},"⚠ "+conf.length+" conflict"+(conf.length>1?"s":"")+" detected — see Today and Umpires tabs"),
-    Object.entries(byWk).sort((a,b)=>a[0].localeCompare(b[0])).map(([ws,wdates])=>{
+    pastWks.length>0&&R("div",{style:{marginBottom:14}},
+      R("button",{className:"btn btn-sm"+(showPast?" btn-amber":""),onClick:()=>setShowPast(p=>!p)},
+        showPast?"▲ Hide past weeks":"▼ Show past ("+pastWks.length+" week"+(pastWks.length>1?"s":"")+")")
+    ),
+    showPast&&pastWks.map(([ws,wdates])=>{
       const p=pub.has(ws),wg=games.filter(g=>wkKey(g.date)===ws&&(lf==="all"||g.locId===lf));
       if(!wg.length)return null;
-      return R("div",{key:ws,ref:el=>wkRefs.current[ws]=el,style:{marginBottom:24}},
+      return R("div",{key:ws,style:{marginBottom:24,opacity:0.6}},
+        R("div",{className:"wpb "+(p?"wpb-p":"wpb-d")},
+          R("span",{style:{fontWeight:700,fontSize:14,flex:1}},"Week of "+ws+(p?" — Published":" — Draft")),
+          p?R("button",{className:"btn btn-sm",onClick:()=>unpubWeek(ws)},"Unpublish"):null
+        ),
+        wdates.filter(date=>games.some(g=>g.date===date&&(lf==="all"||g.locId===lf))).map(date=>{
+          const dow=WDAYS[new Date(date+"T12:00:00").getDay()],dg=games.filter(g=>g.date===date&&(lf==="all"||g.locId===lf));
+          return R("div",{key:date,style:{border:"1px solid #2E3450",borderRadius:12,padding:14,marginBottom:10,background:"#181C27"}},
+            R("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:8}},
+              R("span",{style:{fontWeight:800,fontSize:15,color:"#6B7394"}},dow+", "+date),
+              R("span",{className:"badge b-dim",style:{fontSize:10}},"Past")
+            ),
+            fl.map(loc=>{
+              const lg=dg.filter(g=>g.locId===loc.id);if(!lg.length)return null;
+              return R("div",{key:loc.id,style:{marginBottom:8}},
+                R("span",{className:"badge b-blue",style:{marginBottom:6,display:"inline-flex"}},loc.name),
+                lg.map(game=>R("div",{key:game.id,style:{background:"#1E2333",border:"1px solid #2E3450",borderRadius:8,padding:"8px 12px",marginBottom:5,fontSize:13}},
+                  R("span",{style:{fontWeight:700}},game.division)," · ",
+                  R("span",{style:{color:"#9BA3BF"}},game.time+" · "+game.field+" · "),
+                  R("span",{className:"badge b-dim",style:{fontSize:10,marginLeft:4}},game.status)
+                ))
+              );
+            })
+          );
+        })
+      );
+    }),
+    upcomingWks.map(([ws,wdates])=>{
+      const p=pub.has(ws),wg=games.filter(g=>wkKey(g.date)===ws&&(lf==="all"||g.locId===lf));
+      if(!wg.length)return null;
+      return R("div",{key:ws,style:{marginBottom:24}},
         R("div",{className:"wpb "+(p?"wpb-p":"wpb-d")},
           R("span",{style:{fontWeight:700,fontSize:14,flex:1}},"Week of "+ws+(p?" — Published":" — Draft")),
           p?R("button",{className:"btn btn-sm",onClick:()=>unpubWeek(ws)},"Unpublish")
@@ -243,15 +274,62 @@ function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAu
   );
 }
 
+function CancelledView({games,locs,setModal}){
+  const INACTIVE=["cancelled","postponed","rainout"];
+  const inactive=games.filter(g=>INACTIVE.includes(g.status)).sort((a,b)=>b.date.localeCompare(a.date));
+  const statusColor=s=>s==="cancelled"?"#F09090":s==="rainout"?"#A8C0FC":"#F0C060";
+  const statusBg=s=>s==="cancelled"?"#3D1A1A":s==="rainout"?"#1A2550":"#3D2A00";
+  const statusBorder=s=>s==="cancelled"?"#E05555":s==="rainout"?"#4F7EF7":"#E0A030";
+
+  return R("div",null,
+    R("div",{className:"ph"},
+      R("div",null,
+        R("h2",null,"Cancelled & Rainouts"),
+        R("p",null,inactive.length+" game"+(inactive.length!==1?"s":"")+" to reschedule")
+      )
+    ),
+    inactive.length===0&&R("div",{className:"card"},R("div",{className:"empty"},"No cancelled or rained-out games.")),
+    inactive.map(game=>{
+      const loc=locs.find(l=>l.id===game.locId);
+      const dow=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(game.date+"T12:00:00").getDay()];
+      return R("div",{key:game.id,style:{background:"#181C27",border:"1px solid "+statusBorder(game.status),borderRadius:10,padding:"14px 16px",marginBottom:10}},
+        R("div",{style:{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}},
+          R("div",{style:{flex:1}},
+            R("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}},
+              R("span",{style:{display:"inline-flex",alignItems:"center",padding:"2px 10px",borderRadius:20,fontSize:11,fontWeight:700,background:statusBg(game.status),color:statusColor(game.status),border:"1px solid "+statusBorder(game.status)}},game.status.charAt(0).toUpperCase()+game.status.slice(1)),
+              R("span",{style:{fontWeight:700,fontSize:14}},game.division),
+              R("span",{className:"badge b-blue",style:{fontSize:10}},loc?.name||"?")
+            ),
+            R("div",{style:{fontSize:13,color:"#9BA3BF"}},dow+", "+game.date+" · "+game.time+" · "+game.field),
+            (game.away||game.home)&&R("div",{style:{fontSize:12,color:"#6B7394",marginTop:3}},game.away+" vs "+game.home)
+          ),
+          R("button",{
+            className:"btn btn-green btn-sm",
+            style:{marginTop:2,flexShrink:0},
+            onClick:()=>setModal({type:"add_game",prefill:{
+              locId:game.locId,field:game.field,division:game.division,
+              away:game.away,home:game.home,time:game.time
+            }})
+          },"📅 Reschedule")
+        )
+      );
+    })
+  );
+}
+
 function SchedGamesView(sp){
   const[tab,setTab]=useState("schedule");
+  const cancelCount=sp.games.filter(g=>["cancelled","postponed","rainout"].includes(g.status)).length;
   return R("div",null,
-    R("div",{style:{display:"flex",gap:4,padding:"16px 20px 0",borderBottom:"1px solid #2E3450"}},
-      [{id:"schedule",label:"Weekly view"},{id:"games",label:"All games"},{id:"saturday",label:"Saturday"}].map(t=>R("div",{key:t.id,onClick:()=>setTab(t.id),style:{padding:"10px 18px",cursor:"pointer",fontWeight:600,fontSize:13,borderBottom:tab===t.id?"2px solid #5B7FFF":"2px solid transparent",color:tab===t.id?"#E8ECF8":"#6B7394"}}
-        ,t.label))
+    R("div",{style:{display:"flex",gap:4,padding:"16px 20px 0",borderBottom:"1px solid #2E3450",overflowX:"auto"}},
+      [{id:"schedule",label:"Weekly view"},{id:"games",label:"All games"},{id:"saturday",label:"Saturday"},{id:"cancelled",label:"Cancelled",badge:cancelCount}].map(t=>R("div",{key:t.id,onClick:()=>setTab(t.id),style:{padding:"10px 18px",cursor:"pointer",fontWeight:600,fontSize:13,borderBottom:tab===t.id?"2px solid #5B7FFF":"2px solid transparent",color:tab===t.id?"#E8ECF8":"#6B7394",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}},
+        t.label,
+        t.badge>0&&R("span",{style:{background:"#E05555",color:"#fff",borderRadius:10,padding:"0 6px",fontSize:10,fontWeight:700}},t.badge)
+      ))
     ),
     tab==="schedule"&&R(SchedView,{...sp,hidePage:true}),
     tab==="games"&&R(GamesView,{...sp,hidePage:true}),
-    tab==="saturday"&&R(SaturdayView,{...sp,hidePage:true})
+    tab==="saturday"&&R(SaturdayView,{...sp,hidePage:true}),
+    tab==="cancelled"&&R(CancelledView,{...sp,hidePage:true})
   );
 }

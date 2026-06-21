@@ -209,3 +209,19 @@ function exportICS(worker,games,da,locs,isPub,target){
   a.download=(target==="outlook"?"fieldsync-outlook.ics":"fieldsync-shifts.ics");
   a.click();
 }
+
+const ICS_BUCKET="ics-feeds";
+const SUPABASE_URL="https://aknynshszfxxkspkokru.supabase.co";
+
+async function publishWorkerICS(worker,games,da,locs,isPub){
+  const ics=buildICS(worker,games,da,locs,isPub||((d)=>true));
+  const blob=new Blob([ics],{type:"text/calendar"});
+  const path=worker.id+".ics";
+  const{error}=await sb.storage.from(ICS_BUCKET).upload(path,blob,{upsert:true,contentType:"text/calendar"});
+  if(error)throw error;
+  return SUPABASE_URL+"/storage/v1/object/public/"+ICS_BUCKET+"/"+path;
+}
+
+function workerICSUrl(workerId){
+  return SUPABASE_URL+"/storage/v1/object/public/"+ICS_BUCKET+"/"+workerId+".ics";
+}
