@@ -130,13 +130,20 @@ function App(){
 
   const isPub=date=>pub.has(wkKey(date));
   const pubWeek=ws=>{
-    setPub(p=>{const n=new Set(p);n.add(ws);return n});
+    const newPub=p=>{const n=new Set(p);n.add(ws);return n};
+    setPub(newPub);
     swrite(sb.from('published_weeks').upsert({week_key:ws}));
     const aff=new Set();
     games.filter(g=>wkKey(g.date)===ws).forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE)aff.add(u)})});
     Object.entries(da).filter(([k])=>wkKey(k.split("|")[0])===ws).forEach(([,v])=>{(v.fieldCrew||[]).forEach(u=>aff.add(u));(v.concessions||[]).forEach(u=>aff.add(u))});
     const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"Schedule published for week of "+ws+" — check your shifts.",time:new Date().toISOString(),read:false,type:"info"}));
     setNotifs(p=>[...n,...p]);pushNotifs(n);
+    // Silently refresh ICS calendars for all affected workers
+    const isPubFn=d=>{const s=newPub(pub);return s.has(wkKey(d));};
+    const gd=(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests);
+    workers.filter(w=>aff.has(w.id)).forEach(w=>{
+      publishWorkerICS(w,games,da,locs,isPubFn,gd).catch(e=>console.warn("ICS refresh failed for",w.name,e));
+    });
     showToast("Week published — "+aff.size+" workers notified","s");
   };
   const unpubWeek=ws=>{
