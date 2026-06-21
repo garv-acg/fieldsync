@@ -160,14 +160,21 @@ function parseTimeToHM(t){
   return{h,m:min};
 }
 function icsStamp(date,h,m){return date.replace(/-/g,"")+"T"+String(h).padStart(2,"0")+String(m).padStart(2,"0")+"00"}
+const ICS_TZ="America/Denver";
+const VTIMEZONE=[
+  "BEGIN:VTIMEZONE","TZID:"+ICS_TZ,
+  "BEGIN:STANDARD","DTSTART:19671029T020000","RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=11","TZNAME:MST","TZOFFSETFROM:-0600","TZOFFSETTO:-0700","END:STANDARD",
+  "BEGIN:DAYLIGHT","DTSTART:19870405T020000","RRULE:FREQ=YEARLY;BYDAY=2SU;BYMONTH=3","TZNAME:MDT","TZOFFSETFROM:-0700","TZOFFSETTO:-0600","END:DAYLIGHT",
+  "END:VTIMEZONE"
+];
 function buildICS(worker,games,da,locs,isPub){
-  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//FieldSync//EN","CALSCALE:GREGORIAN","X-WR-CALNAME:FieldSync Shifts"];
+  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//FieldSync//EN","CALSCALE:GREGORIAN","X-WR-CALNAME:FieldSync Shifts","X-WR-TIMEZONE:"+ICS_TZ,...VTIMEZONE];
   const roles=(worker.roles&&worker.roles.length)?worker.roles:[worker.role];
   if(roles.includes("umpire")){
     games.filter(g=>g.status==="scheduled"&&(g.ump1===worker.id||g.ump2===worker.id)&&isPub(g.date)).forEach(g=>{
       const loc=locs.find(l=>l.id===g.locId),{h,m}=parseTimeToHM(g.time);
       lines.push("BEGIN:VEVENT","UID:ump-"+g.id+"-"+worker.id+"@fieldsync");
-      lines.push("DTSTART:"+icsStamp(g.date,h,m),"DTEND:"+icsStamp(g.date,Math.min(h+2,23),m));
+      lines.push("DTSTART;TZID="+ICS_TZ+":"+icsStamp(g.date,h,m),"DTEND;TZID="+ICS_TZ+":"+icsStamp(g.date,Math.min(h+2,23),m));
       lines.push("SUMMARY:"+g.division+" — Umpire ("+(loc?.name||"")+")");
       lines.push("LOCATION:"+(loc?.name||"")+" "+(g.field||""),"END:VEVENT");
     });
@@ -179,7 +186,7 @@ function buildICS(worker,games,da,locs,isPub){
       const t0=dayGames[0]?.time,tN=dayGames[dayGames.length-1]?.time;
       const{h:sh,m:sm}=parseTimeToHM(t0||"9:00 AM"),{h:eh,m:em}=parseTimeToHM(tN||"9:00 AM");
       lines.push("BEGIN:VEVENT","UID:field-"+k+"-"+worker.id+"@fieldsync");
-      lines.push("DTSTART:"+icsStamp(date,sh,sm),"DTEND:"+icsStamp(date,Math.min(eh+2,23),em));
+      lines.push("DTSTART;TZID="+ICS_TZ+":"+icsStamp(date,sh,sm),"DTEND;TZID="+ICS_TZ+":"+icsStamp(date,Math.min(eh+2,23),em));
       lines.push("SUMMARY:Field Crew — "+(loc?.name||"")+" ("+dayGames.length+" game"+(dayGames.length!==1?"s":"")+")"  );
       lines.push("LOCATION:"+(loc?.name||""),"END:VEVENT");
     });
@@ -191,7 +198,7 @@ function buildICS(worker,games,da,locs,isPub){
       const t0=dayGames[0]?.time,tN=dayGames[dayGames.length-1]?.time;
       const{h:sh,m:sm}=parseTimeToHM(t0||"9:00 AM"),{h:eh,m:em}=parseTimeToHM(tN||"9:00 AM");
       lines.push("BEGIN:VEVENT","UID:conc-"+k+"-"+worker.id+"@fieldsync");
-      lines.push("DTSTART:"+icsStamp(date,sh,sm),"DTEND:"+icsStamp(date,Math.min(eh+2,23),em));
+      lines.push("DTSTART;TZID="+ICS_TZ+":"+icsStamp(date,sh,sm),"DTEND;TZID="+ICS_TZ+":"+icsStamp(date,Math.min(eh+2,23),em));
       lines.push("SUMMARY:Snack Shack — "+(loc?.name||"")+" ("+dayGames.length+" game"+(dayGames.length!==1?"s":"")+")"  );
       lines.push("LOCATION:"+(loc?.name||""),"END:VEVENT");
     });
