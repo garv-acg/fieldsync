@@ -5,8 +5,9 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp}){
   for(let i=0;i<7;i++){const d=new Date(d0);d.setDate(d0.getDate()-d0.getDay()+i);wd.push(d.toISOString().slice(0,10))}
   const gw=date=>{
     const mg=hasRole(user,"umpire")?games.filter(g=>g.date===date&&g.status==="scheduled"&&(g.ump1===user.id||g.ump2===user.id)):[];
-    const fieldLocs=hasRole(user,"field")?locs.filter(loc=>(da[dk(date,loc.id)]?.fieldCrew||[]).includes(user.id)):[];
-    const concLocs=hasRole(user,"concessions")?locs.filter(loc=>loc.hasSnackShack&&(da[dk(date,loc.id)]?.concessions||[]).includes(user.id)):[];
+    const hasGames=loc=>games.some(g=>g.date===date&&g.locId===loc.id&&g.status==="scheduled");
+    const fieldLocs=hasRole(user,"field")?locs.filter(loc=>(da[dk(date,loc.id)]?.fieldCrew||[]).includes(user.id)&&hasGames(loc)):[];
+    const concLocs=hasRole(user,"concessions")?locs.filter(loc=>loc.hasSnackShack&&(da[dk(date,loc.id)]?.concessions||[]).includes(user.id)&&hasGames(loc)):[];
     return{games:mg,fieldLocs,concLocs};
   };
   const sw=gw(sel),sp=isPub(sel);
@@ -19,7 +20,10 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp}){
     R("div",{style:{background:"#1A2550",border:"1px solid #4F7EF7",borderRadius:12,padding:"16px 20px",marginBottom:18,display:"flex",alignItems:"center",gap:14}},
       R("div",{style:{width:44,height:44,borderRadius:"50%",background:"#252A3D",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:16,flexShrink:0}},ini(user.name)),
       R("div",null,R("div",{style:{fontWeight:800,fontSize:16}},"Hey "+user.name.split(" ")[0]+"!"),R("div",{style:{color:"#A8C0FC",fontSize:13,marginTop:3}},next?"Next shift: "+next:"No shifts this week.")),
-      R("div",{style:{marginLeft:"auto",display:"flex",gap:4,flexWrap:"wrap"}},myRoles.map(r=>R("span",{key:r,className:"badge "+rb(r)},rl(r))))
+      R("div",{style:{marginLeft:"auto",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}},
+        R("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},myRoles.map(r=>R("span",{key:r,className:"badge "+rb(r)},rl(r)))),
+        R("div",{style:{fontSize:11,color:"#6B7394",marginTop:2}},"This week")
+      )
     ),
     R("div",{className:"week-strip"},wd.map(date=>{
       const w=gw(date),has=hasAny(w),d=new Date(date+"T12:00:00"),isSel=date===sel;
@@ -63,10 +67,21 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp}){
           sw.fieldLocs.map(loc=>{
             const d=da[dk(sel,loc.id)]||{};
             const tm=(d.fieldCrew||[]).filter(id=>id!==user.id).map(id=>workers.find(w=>w.id===id)?.name||"?");
+            const locGames=games.filter(g=>g.date===sel&&g.locId===loc.id&&g.status==="scheduled").sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
+            if(locGames.length===0)return null;
+            const _t0=locGames[0]?.time,_tN=locGames[locGames.length-1]?.time;
+            const timeRange=_t0+(_tN&&_tN!==_t0?" – "+_tN:"");
             return R("div",{key:loc.id,style:{background:"#1E2333",border:"1px solid #2E3450",borderRadius:8,padding:"12px",marginBottom:8}},
               R("div",{style:{fontWeight:700,fontSize:14}},loc.name),
-              R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},"Field crew assignment"),
+              R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},"Field crew · "+locGames.length+" game"+(locGames.length!==1?"s":"")+" · "+timeRange),
               tm.length>0&&R("div",{style:{fontSize:12,color:"#6B7394",marginTop:4}},"With you: "+tm.join(", ")),
+              R("div",{style:{marginTop:10,display:"flex",flexDirection:"column",gap:4}},
+                locGames.map(g=>R("div",{key:g.id,style:{display:"flex",alignItems:"center",gap:8,fontSize:12,background:"#151928",borderRadius:6,padding:"6px 8px"}},
+                  R("span",{style:{color:"#4F7EF7",fontWeight:700,minWidth:54}},g.time),
+                  R("span",{style:{color:"#7DDBA8",fontWeight:600,minWidth:50}},g.field),
+                  R("span",{style:{color:"#C8D0E8"}},g.division)
+                ))
+              ),
               R(RsvpBtns,{wId:user.id,date:sel,locId:loc.id,getRsvp,setRsvpStatus})
             );
           })
@@ -81,9 +96,13 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp}){
           sw.concLocs.map(loc=>{
             const d=da[dk(sel,loc.id)]||{};
             const tm=(d.concessions||[]).filter(id=>id!==user.id).map(id=>workers.find(w=>w.id===id)?.name||"?");
+            const locGamesC=games.filter(g=>g.date===sel&&g.locId===loc.id&&g.status==="scheduled").sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
+            if(locGamesC.length===0)return null;
+            const _c0=locGamesC[0]?.time,_cN=locGamesC[locGamesC.length-1]?.time;
+            const timeRangeC=_c0+(_cN&&_cN!==_c0?" – "+_cN:"");
             return R("div",{key:loc.id,style:{background:"#1E2333",border:"1px solid #2E3450",borderRadius:8,padding:"12px",marginBottom:8}},
               R("div",{style:{fontWeight:700,fontSize:14}},loc.name),
-              R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},"Snack shack assignment"),
+              R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},"Snack shack · "+locGamesC.length+" game"+(locGamesC.length!==1?"s":"")+" · "+timeRangeC),
               tm.length>0&&R("div",{style:{fontSize:12,color:"#6B7394",marginTop:4}},"With you: "+tm.join(", ")),
               R(RsvpBtns,{wId:user.id,date:sel,locId:loc.id,getRsvp,setRsvpStatus})
             );

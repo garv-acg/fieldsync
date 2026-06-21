@@ -7,8 +7,9 @@ function MyShifts({user,games,da,workers,locs,isPub,getRsvp,setRsvpStatus,reques
   if(hasRole(user,"concessions"))userRoles.push("concessions");
 
   const allG=hasRole(user,"umpire")?games.filter(g=>g.status==="scheduled"&&(g.ump1===user.id||g.ump2===user.id)).sort((a,b)=>new Date(a.date)-new Date(b.date)):[];
-  const allField=hasRole(user,"field")?Object.entries(da).filter(([,v])=>(v.fieldCrew||[]).includes(user.id)).sort((a,b)=>a[0].localeCompare(b[0])):[];
-  const allConc=hasRole(user,"concessions")?Object.entries(da).filter(([k,v])=>{const locId=k.split("|")[1];const loc=locs.find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(user.id)}).sort((a,b)=>a[0].localeCompare(b[0])):[];
+  const hasGamesOn=(date,locId)=>games.some(g=>g.date===date&&g.locId===locId&&g.status==="scheduled");
+  const allField=hasRole(user,"field")?Object.entries(da).filter(([k,v])=>{const[date,locId]=k.split("|");return(v.fieldCrew||[]).includes(user.id)&&hasGamesOn(date,locId)}).sort((a,b)=>a[0].localeCompare(b[0])):[];
+  const allConc=hasRole(user,"concessions")?Object.entries(da).filter(([k,v])=>{const[date,locId]=k.split("|");const loc=locs.find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(user.id)&&hasGamesOn(date,locId)}).sort((a,b)=>a[0].localeCompare(b[0])):[];
 
   const myG=showPast?allG:allG.filter(g=>g.date>=today);
   const myField=showPast?allField:allField.filter(([k])=>k.split("|")[0]>=today);
@@ -33,7 +34,7 @@ function MyShifts({user,games,da,workers,locs,isPub,getRsvp,setRsvpStatus,reques
 
   return R("div",null,
     R("div",{className:"ph"},
-      R("div",null,R("h2",null,"My shifts"),R("p",null,"Confirm, offer up, or claim open shifts")),
+      R("div",null,R("h2",null,"My shifts"),R("p",null,"Full season schedule — confirm, offer up, or claim open shifts")),
       R("div",{style:{display:"flex",gap:8,alignItems:"center"}},
         pastCount>0&&R("button",{className:"btn btn-sm"+(showPast?" btn-amber":""),onClick:()=>setShowPast(p=>!p)},
           showPast?"Hide past shifts":"Show past ("+pastCount+")"
@@ -68,11 +69,14 @@ function MyShifts({user,games,da,workers,locs,isPub,getRsvp,setRsvpStatus,reques
         const tm=(v.fieldCrew||[]).filter(id=>id!==user.id).map(id=>workers.find(w=>w.id===id)?.name||"?");
         const p=isPub(date),offered=isOffered(date,locId);
         const isDragger=getDragger(date,locId)===user.id;
+        const shiftGames=games.filter(g=>g.date===date&&g.locId===locId&&g.status==="scheduled").sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
+        const _s0=shiftGames[0]?.time,_sN=shiftGames[shiftGames.length-1]?.time;
+        const shiftTimeRange=shiftGames.length>0?_s0+(_sN&&_sN!==_s0?" – "+_sN:""):null;
         return R("div",{key:k,style:{background:"#181C27",border:"1px solid "+(isDragger?"#4F8A5A":"#2E3450"),borderRadius:10,padding:"14px",marginBottom:10}},
           !p&&R("div",{style:{fontSize:11,color:"#F0C060",marginBottom:8}},"🔒 Not published yet"),
-          isDragger&&R("div",{style:{display:"inline-flex",alignItems:"center",gap:6,background:"#1A3D2C",border:"1px solid #3DBA7B",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,color:"#7DDBA8",marginBottom:8}},"🚜 You're dragging the field today"),
+          isDragger&&R("div",{style:{display:"inline-flex",alignItems:"center",gap:6,background:"#1A3D2C",border:"1px solid #3DBA7B",borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:700,color:"#7DDBA8",marginBottom:8}},"🚜 You're dragging the field"+(date===today?" today":"")),
           R("div",{style:{fontWeight:700,fontSize:14}},date),
-          R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},(loc?.name||"?")+" — Field Crew"),
+          R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},(loc?.name||"?")+" — Field Crew · "+shiftGames.length+" game"+(shiftGames.length!==1?"s":"")+(shiftTimeRange?" · "+shiftTimeRange:"")),
           tm.length>0&&R("div",{style:{fontSize:12,color:"#6B7394",marginTop:4}},"With: "+tm.join(", ")),
           p&&R("div",null,
             R(RsvpBtns,{wId:user.id,date,locId,getRsvp,setRsvpStatus}),
@@ -88,10 +92,13 @@ function MyShifts({user,games,da,workers,locs,isPub,getRsvp,setRsvpStatus,reques
         const[date,locId]=k.split("|"),loc=locs.find(l=>l.id===locId);
         const tm=(v.concessions||[]).filter(id=>id!==user.id).map(id=>workers.find(w=>w.id===id)?.name||"?");
         const p=isPub(date),offered=isOffered(date,locId);
+        const concGames=games.filter(g=>g.date===date&&g.locId===locId&&g.status==="scheduled").sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
+        const _cc0=concGames[0]?.time,_ccN=concGames[concGames.length-1]?.time;
+        const concTimeRange=concGames.length>0?_cc0+(_ccN&&_ccN!==_cc0?" – "+_ccN:""):null;
         return R("div",{key:k,style:{background:"#181C27",border:"1px solid #2E3450",borderRadius:10,padding:"14px",marginBottom:10}},
           !p&&R("div",{style:{fontSize:11,color:"#F0C060",marginBottom:8}},"🔒 Not published yet"),
           R("div",{style:{fontWeight:700,fontSize:14}},date),
-          R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},(loc?.name||"?")+" — Snack Shack"),
+          R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},(loc?.name||"?")+" — Snack Shack"+(concTimeRange?" · "+concTimeRange:"")),
           tm.length>0&&R("div",{style:{fontSize:12,color:"#6B7394",marginTop:4}},"With: "+tm.join(", ")),
           p&&R("div",null,
             R(RsvpBtns,{wId:user.id,date,locId,getRsvp,setRsvpStatus}),

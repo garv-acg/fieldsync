@@ -27,6 +27,7 @@ const wa=(w,date,requests,role)=>{
   });
 };
 const rsvpKey=(wId,date,locId)=>`${wId}_${date}_${locId}`;
+const timeToMin=t=>{const m=(t||"").match(/(\d+):(\d+)\s*(AM|PM)/i);if(!m)return 0;let h=parseInt(m[1],10);const mn=parseInt(m[2],10),ap=m[3].toUpperCase();if(ap==="PM"&&h!==12)h+=12;if(ap==="AM"&&h===12)h=0;return h*60+mn};
 const normDiv=raw=>{if(!raw)return"AA";if(raw.toLowerCase().includes("9-11")||raw.toLowerCase().includes("district"))return"Majors";return{"Minors AA":"AA","Minors AAA":"AAA","Minors A":"A","Teeball":"Tee Ball","T-Ball":"Tee Ball","8U":"Softball 8U","10U":"Softball 10U","12U":"Softball 12U"}[raw]||raw};
 const PAY_DEFAULTS={umpireRate:45,fieldRate:34,concessionsRate:17};
 const LOCS=[{id:"sc",name:"Spring Creek",fields:["Field 1","Field 2","Field 3"],hasSnackShack:false},{id:"mv",name:"Mission Viejo",fields:["Field 1","Field 2","Field 3","Field 4"],hasSnackShack:true}];
@@ -37,7 +38,7 @@ const WORKERS=[
   {id:3,name:"Riley Stone",role:"umpire",email:"riley@crew.com",avail:["Wed","Thu","Sat","Sun"],password:"ump3"},
   {id:4,name:"Taylor Brooks",role:"umpire",email:"taylor@crew.com",avail:["Mon","Tue","Fri","Sat"],password:"ump4"},
   // ── Field crew ────────────────────────────────────────────────────
-  {id:5,name:"Aidan Garver",role:"field",email:"aidan.garver@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:6,password:"aidan"},
+  {id:5,name:"Aidan Garver",role:"field",roles:["field","concessions"],email:"aidan.garver@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:6,password:"aidan"},
   {id:6,name:"Brennan Niewinski",role:"field",email:"brennan.niewinski@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:6,password:"brennan"},
   {id:7,name:"Brock Benedict",role:"field",email:"brock.benedict@crew.com",avail:["Mon","Wed"],yearsExp:1,password:"brock"},
   {id:8,name:"Trey Felts",role:"field",email:"trey.felts@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:1,password:"trey"},
@@ -45,26 +46,15 @@ const WORKERS=[
   {id:10,name:"Dylan Keisler",role:"field",email:"dylan.keisler@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:3,password:"dylan"},
   // NOTE: Caroline and Lucy should be scheduled on the same shifts when possible
   {id:11,name:"Caroline Pavlisko",role:"field",email:"caroline.pavlisko@crew.com",avail:["Mon","Wed","Fri"],yearsExp:1,password:"caroline"},
+  {id:18,name:"Emerson Hain",role:"field",email:"emerson.hain@crew.com",avail:["Mon","Tue"],yearsExp:0,password:"emerson"},
   {id:12,name:"Lucy Davis",role:"field",email:"lucy.davis@crew.com",avail:["Mon","Wed","Sat"],yearsExp:1,password:"lucy"},
   // ── Snack shack (concessions) ────────────────────────────────────
   // NOTE: Ben and Jack must be scheduled together on the same shift
-  {id:13,name:"James",role:"concessions",email:"james@crew.com",avail:["Mon","Thu","Fri"],yearsExp:0,password:"james"},   // Grill operator
-  {id:14,name:"Ben",role:"concessions",email:"ben@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:0,password:"ben"},     // Back of house
-  {id:15,name:"Jack",role:"concessions",email:"jack@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:0,password:"jack"},   // Back of house
-  {id:16,name:"Juliana",role:"concessions",email:"juliana@crew.com",avail:[],yearsExp:0,password:"juliana"},              // Cashier — manual scheduling only; unpredictable hours
-  {id:17,name:"Natalia",role:"concessions",email:"natalia@crew.com",avail:["Mon","Thu","Fri"],yearsExp:0,password:"natalia"}, // Volunteer (age 12) — use only when extra help needed
+  {id:14,name:"Ben Stith",role:"concessions",email:"ben.stith@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:0,password:"ben"},
+  {id:15,name:"Jack Stith",role:"concessions",email:"jack.stith@crew.com",avail:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],yearsExp:0,password:"jack"},
+  {id:16,name:"Juliana Stith",role:"concessions",email:"juliana.stith@crew.com",avail:[],yearsExp:0,password:"juliana"}, // Cashier — manual only
 ];
-const INIT_GAMES=[
-  {id:1001,locId:"sc",field:"Field 1",division:"AA",date:"2026-06-13",time:"9:00 AM",home:"Angels",away:"Bears",status:"scheduled",ump1:1,ump2:NONE},
-  {id:1002,locId:"sc",field:"Field 2",division:"AAA",date:"2026-06-13",time:"11:00 AM",home:"Cardinals",away:"Dodgers",status:"scheduled",ump1:2,ump2:3},
-  {id:1003,locId:"mv",field:"Field 1",division:"Majors",date:"2026-06-14",time:"10:00 AM",home:"Eagles",away:"Falcons",status:"scheduled",ump1:1,ump2:4},
-  {id:1004,locId:"mv",field:"Field 3",division:"Softball 12U",date:"2026-06-14",time:"1:00 PM",home:"Giants",away:"Hawks",status:"scheduled",ump1:3,ump2:NONE},
-  {id:1005,locId:"sc",field:"Field 3",division:"AA",date:"2026-06-15",time:"9:00 AM",home:"Indians",away:"Jets",status:"scheduled",ump1:NONE,ump2:NONE},
-  {id:1006,locId:"mv",field:"Field 2",division:"Tee Ball",date:"2026-06-15",time:"8:00 AM",home:"Kings",away:"Lions",status:"scheduled",ump1:NONE,ump2:NONE},
-  {id:1007,locId:"sc",field:"Field 2",division:"Majors",date:"2026-06-13",time:"9:00 AM",home:"Sox",away:"Tigers",status:"scheduled",ump1:4,ump2:NONE},
-  {id:1008,locId:"sc",field:"Field 1",division:"AAA",date:"2026-06-21",time:"10:00 AM",home:"Angels",away:"Bears",status:"scheduled",ump1:1,ump2:2},
-  {id:1009,locId:"mv",field:"Field 2",division:"Majors",date:"2026-06-22",time:"1:00 PM",home:"Cardinals",away:"Eagles",status:"scheduled",ump1:1,ump2:3},
-];
+const INIT_GAMES=[];
 const INIT_DA={};
 const INIT_PUB=new Set([]);
 const INIT_RSVP={};

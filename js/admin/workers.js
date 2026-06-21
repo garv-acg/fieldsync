@@ -1,4 +1,4 @@
-function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig,setModal}){
+function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig,setModal,updWorkerPassword}){
   const[editing,setEditing]=useState(null);
   const ALL_ROLES=["umpire","field","concessions"];
   const workerRoles=w=>w.roles&&w.roles.length?w.roles:[w.role];
@@ -10,7 +10,7 @@ function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig
       R("div",null,R("h2",null,"Workers"),R("p",null,"Set individual pay rates and roles for each staff member")),
       R("button",{className:"btn btn-blue",onClick:()=>setModal({type:"add_worker"})},"+  Add worker")
     ),
-    R("div",{className:"card"},R("table",{className:"tbl"},
+    R("div",{className:"card"},R("div",{className:"tbl-wrap"},R("table",{className:"tbl"},
       R("thead",null,R("tr",null,
         R("th",null,"Name"),R("th",null,"Roles"),R("th",null,"Email"),R("th",null,"Available"),R("th",null,"Shifts"),R("th",null,"Rate"),R("th",null,"")
       )),
@@ -44,18 +44,20 @@ function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig
             ),
             R("td",{style:{padding:"8px 10px"}},R("button",{className:"btn btn-sm",onClick:()=>setEditing(isEditing?null:w.id)},isEditing?"Done":"Edit"))
           ),
-          isEditing&&R(WorkerEditRow,{key:w.id+"-edit",w,workerRoles,ALL_ROLES,globalRate,updWorkerRoles,updWorkerPayRate})
+          isEditing&&R(WorkerEditRow,{key:w.id+"-edit",w,workerRoles,ALL_ROLES,globalRate,updWorkerRoles,updWorkerPayRate,updWorkerPassword})
         ];
       }))
     ))
   );
 }
 
-function WorkerEditRow({w,workerRoles,ALL_ROLES,globalRate,updWorkerRoles,updWorkerPayRate}){
+function WorkerEditRow({w,workerRoles,ALL_ROLES,globalRate,updWorkerRoles,updWorkerPayRate,updWorkerPassword}){
   const roles=workerRoles(w);
   const[pendingRoles,setPendingRoles]=useState(roles);
   const initRates=()=>{const o={};ALL_ROLES.forEach(r=>{const v=(w.payRates||{})[r];o[r]=v!=null?String(v):""});return o};
   const[rateInputs,setRateInputs]=useState(initRates);
+  const[newPass,setNewPass]=useState(""),[passSaved,setPassSaved]=useState(false);
+  const savePass=()=>{if(!newPass.trim())return;updWorkerPassword(w.id,newPass.trim());setNewPass("");setPassSaved(true);setTimeout(()=>setPassSaved(false),2000)};
 
   const toggleRole=r=>{
     if(pendingRoles.includes(r)&&pendingRoles.length===1)return;
@@ -70,6 +72,15 @@ function WorkerEditRow({w,workerRoles,ALL_ROLES,globalRate,updWorkerRoles,updWor
 
   return R("tr",{style:{background:"#1A1F2E",borderTop:"none"}},
     R("td",{colSpan:7,style:{padding:"14px 20px"}},
+      R("div",{style:{display:"flex",gap:32,alignItems:"flex-start",flexWrap:"wrap",marginBottom:16}},
+        R("div",null,
+          R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",marginBottom:8}},"Reset Password"),
+          R("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+            R("input",{type:"text",value:newPass,onChange:e=>setNewPass(e.target.value),placeholder:"New password…",style:{padding:"5px 8px",borderRadius:6,border:"1px solid #5B7FFF",background:"#1E2333",color:"#E8ECF8",fontSize:13,width:160}}),
+            R("button",{className:"btn btn-sm btn-green",disabled:!newPass.trim(),onClick:savePass},passSaved?"✓ Saved":"Set password")
+          )
+        )
+      ),
       R("div",{style:{display:"flex",gap:32,alignItems:"flex-start",flexWrap:"wrap"}},
         R("div",null,
           R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",marginBottom:8}},"Roles"),

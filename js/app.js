@@ -135,7 +135,7 @@ function App(){
     const aff=new Set();
     games.filter(g=>wkKey(g.date)===ws).forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE)aff.add(u)})});
     Object.entries(da).filter(([k])=>wkKey(k.split("|")[0])===ws).forEach(([,v])=>{(v.fieldCrew||[]).forEach(u=>aff.add(u));(v.concessions||[]).forEach(u=>aff.add(u))});
-    const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"Schedule published for week of "+ws+" — check your shifts.",time:"Just now",read:false,type:"info"}));
+    const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"Schedule published for week of "+ws+" — check your shifts.",time:new Date().toISOString(),read:false,type:"info"}));
     setNotifs(p=>[...n,...p]);pushNotifs(n);
     showToast("Week published — "+aff.size+" workers notified","s");
   };
@@ -168,7 +168,7 @@ function App(){
         return!Object.entries(da).some(([k,v])=>k.split("|")[0]===date&&((v.fieldCrew||[]).includes(w2.id)||(v.concessions||[]).includes(w2.id)));
       });
       const replText=replacements.length?"Available to cover: "+replacements.map(r=>r.name).join(", "):"No one else appears available that day.";
-      const n=[{id:Date.now(),workerId:0,msg:"⚠ "+( w?.name||"A worker")+" declined "+what+" on "+date+" at "+(loc?.name||locId)+". "+replText,time:"Just now",read:false,type:"warn"}];
+      const n=[{id:Date.now(),workerId:0,msg:"⚠ "+( w?.name||"A worker")+" declined "+what+" on "+date+" at "+(loc?.name||locId)+". "+replText,time:new Date().toISOString(),read:false,type:"warn"}];
       setNotifs(p=>[...n,...p]);pushNotifs(n);
     }
     showToast(status==="confirmed"?"Confirmed!":"Marked can't make it — manager notified",status==="confirmed"?"s":"w");
@@ -206,7 +206,7 @@ function App(){
     games.filter(g=>g.date===date&&g.locId===locId).forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE)aff.add(u)})});
     const loc=locs.find(l=>l.id===locId),d2=da[dk(date,locId)]||{};
     (d2.fieldCrew||[]).forEach(u=>aff.add(u));(d2.concessions||[]).forEach(u=>aff.add(u));
-    const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"RAINOUT: "+date+" at "+(loc?.name||locId)+" — all games cancelled.",time:"Just now",read:false,type:"warn"}));
+    const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"RAINOUT: "+date+" at "+(loc?.name||locId)+" — all games cancelled.",time:new Date().toISOString(),read:false,type:"warn"}));
     setNotifs(p=>[...n,...p]);pushNotifs(n);
     showToast("Rainout — "+aff.size+" workers notified","w");setModal(null);
   };
@@ -254,7 +254,7 @@ function App(){
     const aff=new Set();
     games.filter(g=>g.date===date&&g.status==="scheduled").forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE)aff.add(u)})});
     Object.entries(da).filter(([k])=>k.split("|")[0]===date).forEach(([,v])=>{(v.fieldCrew||[]).forEach(u=>aff.add(u));(v.concessions||[]).forEach(u=>aff.add(u))});
-    const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"🔔 Reminder: you're scheduled on "+date+" — check My Shifts for details.",time:"Just now",read:false,type:"info"}));
+    const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"🔔 Reminder: you're scheduled on "+date+" — check My Shifts for details.",time:new Date().toISOString(),read:false,type:"info"}));
     setNotifs(p=>[...n,...p]);pushNotifs(n);
     const recipients=workers.filter(w=>aff.has(w.id)&&(w.email||w.phone)).map(w=>({name:w.name,email:w.email||null,phone:w.phone||null}));
     if(recipients.length){
@@ -276,6 +276,12 @@ function App(){
     setWorkers(p=>p.map(w=>w.id===wId?{...w,phone}:w));
     swrite(sb.from('workers').update({phone}).eq('id',wId));
     showToast("Phone updated","s");
+  };
+
+  const updWorkerPassword=(wId,newPass)=>{
+    setWorkers(p=>p.map(w=>w.id===wId?{...w,password:newPass}:w));
+    swrite(sb.from('workers').update({password:newPass}).eq('id',wId));
+    showToast("Password updated","s");
   };
 
   // Manually override the dragger for a given date+location
@@ -300,7 +306,7 @@ function App(){
     setRequests(p=>p.map(r=>r.id===reqId?{...r,claimedBy:claimerId,status:"pending_approval"}:r));
     swrite(sb.from('requests').update({claimed_by:claimerId,status:'pending_approval'}).eq('id',reqId));
     const req=requests.find(r=>r.id===reqId),claimer=workers.find(w=>w.id===claimerId),offerer=workers.find(w=>w.id===req?.workerId),loc=locs.find(l=>l.id===req?.locId);
-    const n=[{id:Date.now(),workerId:0,msg:"🔄 "+claimer?.name+" wants to take "+offerer?.name+"'s shift on "+req?.date+" at "+(loc?.name||"?")+" — approve in Requests.",time:"Just now",read:false,type:"info"}];
+    const n=[{id:Date.now(),workerId:0,msg:"🔄 "+claimer?.name+" wants to take "+offerer?.name+"'s shift on "+req?.date+" at "+(loc?.name||"?")+" — approve in Requests.",time:new Date().toISOString(),read:false,type:"info"}];
     setNotifs(p=>[...n,...p]);pushNotifs(n);
     showToast("Claim submitted — waiting for manager approval");
   };
@@ -327,14 +333,14 @@ function App(){
       }
       const claimer=workers.find(w=>w.id===req.claimedBy),loc=locs.find(l=>l.id===req.locId);
       const n=[
-        {id:Date.now(),  workerId:req.claimedBy,msg:"✅ Your claim for "+req.date+" at "+(loc?.name||"?")+" was approved — you're on the schedule.",time:"Just now",read:false,type:"success"},
-        {id:Date.now()+1,workerId:req.workerId, msg:"✅ "+claimer?.name+" is covering your shift on "+req.date+" at "+(loc?.name||"?")+".",time:"Just now",read:false,type:"success"}
+        {id:Date.now(),  workerId:req.claimedBy,msg:"✅ Your claim for "+req.date+" at "+(loc?.name||"?")+" was approved — you're on the schedule.",time:new Date().toISOString(),read:false,type:"success"},
+        {id:Date.now()+1,workerId:req.workerId, msg:"✅ "+claimer?.name+" is covering your shift on "+req.date+" at "+(loc?.name||"?")+".",time:new Date().toISOString(),read:false,type:"success"}
       ];
       setNotifs(p=>[...n,...p]);pushNotifs(n);
     } else {
       if(req?.type==="shift_offer"&&action==="denied"&&req.claimedBy){
         const loc=locs.find(l=>l.id===req.locId);
-        const n=[{id:Date.now(),workerId:req.claimedBy,msg:"❌ Your claim for "+req.date+" at "+(loc?.name||"?")+" was denied.",time:"Just now",read:false,type:"warn"}];
+        const n=[{id:Date.now(),workerId:req.claimedBy,msg:"❌ Your claim for "+req.date+" at "+(loc?.name||"?")+" was denied.",time:new Date().toISOString(),read:false,type:"warn"}];
         setNotifs(p=>[...n,...p]);pushNotifs(n);
       }
     }
@@ -374,13 +380,21 @@ function App(){
   const importCSV=csv=>{
     // Robust CSV parser — handles quoted fields containing commas
     const parseRow=line=>{const cols=[];let cur="",inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){inQ=!inQ}else if(ch===","&&!inQ){cols.push(cur.trim());cur=""}else{cur+=ch}}cols.push(cur.trim());return cols};
-    const isValidDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(d)&&!isNaN(new Date(d+"T12:00:00").getTime());
+    const normDate=raw=>{
+      const s=(raw||"").replace(/"/g,"").trim();
+      if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+      // M/D/YY or MM/DD/YY → YYYY-MM-DD
+      const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if(m){const y=m[3].length===2?"20"+m[3]:m[3];return y+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0");}
+      return null;
+    };
+    const isValidDate=d=>!!d&&!isNaN(new Date(d+"T12:00:00").getTime());
     const lines=csv.trim().split(/\r?\n/),ng=[],skipped=[];
     for(let i=1;i<lines.length;i++){
       if(!lines[i].trim())continue;
       const c=parseRow(lines[i]);
       if(c.length<4){skipped.push(i+1);continue;}
-      const date=c[3]?.replace(/"/g,"").trim();
+      const date=normDate(c[3]);
       if(!isValidDate(date)){skipped.push(i+1);continue;}
       const locRaw=(c[0]||"").toLowerCase();
       ng.push({id:Date.now()+i,locId:locRaw.includes("spring")||locRaw.includes("sc")?"sc":"mv",field:c[1]||"Field 1",division:normDiv(c[2]||""),date,time:c[4]||"9:00 AM",away:c[5]||"",home:c[6]||"",status:"scheduled",ump1:NONE,ump2:NONE});
@@ -393,24 +407,38 @@ function App(){
   };
 
   if(!loaded)return R("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#9BA3BF",fontSize:14}},"Loading FieldSync…");
-  if(!user)return R(Login,{onLogin:u=>{setUser(u);setView(u.role==="overseer"?"today":"worker_home")}});
+  if(!user)return R(Login,{onLogin:u=>{setUser(u);setView(u.role==="overseer"?"today":"worker_home")},liveWorkers:workers});
   // Merge live worker record so multi-role assignments set by admin are always reflected.
   // Only overwrite fields that are non-null in the live record, so seed roles survive when the DB column doesn't exist yet.
   const effectiveUser=user.role==="overseer"?user:(()=>{const live=workers.find(w=>w.id===user.id)||{};const merged={...user};Object.entries(live).forEach(([k,v])=>{if(v!=null)merged[k]=v});return merged;})();
-  const myNotifs=effectiveUser.role==="overseer"?notifs:notifs.filter(n=>n.workerId===effectiveUser.id||n.workerId===0&&false);
+  const _rawNotifs=effectiveUser.role==="overseer"?notifs:notifs.filter(n=>n.workerId===effectiveUser.id||n.workerId===0&&false);
+  // Deduplicate by message text — keep only the most recent copy of each unique message
+  const myNotifs=_rawNotifs.filter((n,i)=>_rawNotifs.findIndex(x=>x.msg===n.msg)===i);
   const unread=myNotifs.filter(n=>!n.read).length,pendingR=requests.filter(r=>r.status==="pending"||r.status==="pending_approval").length;
   const adminNav=[{id:"today",label:"Today"},{id:"schedule",label:"Schedule"},{id:"staff",label:"Staff",badge:conf.length},{id:"requests",label:"Requests",badge:pendingR},{id:"reports",label:"Reports"},{id:"settings",label:"Settings"}];
   const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"notifications",label:"Notifications",badge:unread}];
   const nav=effectiveUser.role==="overseer"?adminNav:workerNav;
-  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updSnackShackOpen,updWorkerRoles,updWorkerPayRate,addWorker};
+  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updSnackShackOpen,updWorkerRoles,updWorkerPayRate,addWorker,updWorkerPassword};
+  const isWorker=effectiveUser.role!=="overseer";
+  const workerBottomNav=[
+    {id:"worker_home",label:"Home",icon:"🏠"},
+    {id:"my_shifts",label:"Shifts",icon:"📅"},
+    {id:"my_requests",label:"Requests",icon:"📋"},
+    {id:"availability",label:"Profile",icon:"👤"},
+    {id:"notifications",label:"Alerts",icon:"🔔",badge:unread},
+  ];
   return R("div",{className:"app"},
     R("div",{className:"topbar"},
       R("div",{className:"logo"},"Field",R("span",null,"Sync")),
-      R("div",{style:{display:"flex",alignItems:"center",gap:12}},
-        conf.length>0&&R("span",{style:{background:"#3D1A1A",color:"#F09090",border:"1px solid #E05555",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"},onClick:()=>setView("staff")},"⚠ "+conf.length+" conflict"+(conf.length>1?"s":"")),
-        R("span",{style:{position:"relative",cursor:"pointer",fontSize:18,lineHeight:1},onClick:()=>setView("notifications")},"🔔",unread>0&&R("span",{style:{position:"absolute",top:-4,right:-6,background:"#E05555",color:"#fff",borderRadius:"50%",fontSize:9,fontWeight:700,minWidth:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}},unread)),
-        R("span",{className:"badge "+(effectiveUser.role==="overseer"?"b-blue":"b-green")},effectiveUser.role==="overseer"?"Admin":rl(effectiveUser.role)),
-        R("span",{style:{fontSize:13,fontWeight:600}},effectiveUser.name),
+      R("div",{style:{display:"flex",alignItems:"center",gap:8}},
+        conf.length>0&&R("span",{className:"conflict-pill",onClick:()=>setView("staff")},"⚠ "+conf.length),
+        !isWorker&&R("span",{style:{position:"relative",cursor:"pointer",fontSize:18,lineHeight:1},onClick:()=>setView("notifications")},"🔔",unread>0&&R("span",{style:{position:"absolute",top:-4,right:-6,background:"#E05555",color:"#fff",borderRadius:"50%",fontSize:9,fontWeight:700,minWidth:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 2px"}},unread)),
+        R("span",{className:"topbar-badges"},
+          effectiveUser.role==="overseer"
+            ?R("span",{className:"badge b-blue"},"Admin")
+            :(effectiveUser.roles&&effectiveUser.roles.length>1?effectiveUser.roles:[effectiveUser.role]).map(r=>R("span",{key:r,className:"badge "+rb(r),style:{marginLeft:2}},rl(r)))
+        ),
+        R("span",{className:"topbar-name"},effectiveUser.name),
         R("button",{className:"btn btn-sm",onClick:()=>setUser(null)},"Sign out")
       )
     ),
@@ -419,7 +447,7 @@ function App(){
         nav.map(item=>R("div",{key:item.id,className:"nav-item"+(view===item.id?" active":""),onClick:()=>setView(item.id)},item.label,item.badge>0&&R("span",{className:"nav-badge"},item.badge))),
         R("div",{className:"nav-bottom"},R("div",{className:"nav-item",style:{fontSize:12,color:"#6B7394"}},effectiveUser.name))
       ),
-      R("div",{className:"content"},
+      R("div",{className:"content"+(isWorker?" content-worker":"")},
         view==="today"&&R(TodayView,sp),
         view==="schedule"&&R(SchedGamesView,sp),
         view==="staff"&&R(StaffView,sp),
@@ -429,6 +457,12 @@ function App(){
         view==="notifications"&&R(NotifsView,sp),
         view==="worker_home"&&R(WHome,sp),view==="my_shifts"&&R(MyShifts,sp),view==="my_requests"&&R(MyReqs,sp),view==="availability"&&R(AvailView,sp)
       )
+    ),
+    isWorker&&R("nav",{className:"bottom-nav"},
+      workerBottomNav.map(item=>R("div",{key:item.id,className:"bn-item"+(view===item.id?" bn-active":""),onClick:()=>setView(item.id)},
+        R("span",{className:"bn-icon",style:{position:"relative"}},item.icon,item.badge>0&&R("span",{className:"bn-badge"},item.badge)),
+        R("span",{className:"bn-label"},item.label)
+      ))
     ),
     modal&&R(ModalRouter,{...sp,modal,onClose:()=>setModal(null)}),
     toast&&R("div",{className:"toast "+(toast.type==="s"?"toast-s":toast.type==="w"?"toast-w":"")},toast.msg)

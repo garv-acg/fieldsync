@@ -26,23 +26,26 @@ function autoSched(games,workers,da,requests,locs){
   const umps=workers.filter(w=>hasRole(w,"umpire"));
   const fw=workers.filter(w=>hasRole(w,"field"));
   const cw=workers.filter(w=>hasRole(w,"concessions"));
+  // Track umpire availability per date+time slot (not whole day) so they can work multiple time slots
   const uu={};
-  ug.forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE){if(!uu[u])uu[u]=new Set();uu[u].add(g.date)}})});
+  const uuKey=(date,time)=>date+"|"+(time||"");
+  ug.forEach(g=>{[g.ump1,g.ump2].forEach(u=>{if(u&&u!==NONE){if(!uu[u])uu[u]=new Set();uu[u].add(uuKey(g.date,g.time))}})});
 
   // Process dual-umpire games first so most-senior umps fill those slots
   const sorted=[...ug].sort((a,b)=>(isDual(b.division)?1:0)-(isDual(a.division)?1:0));
   sorted.forEach(g=>{
     if(g.status!=="scheduled")return;
-    const avail=umps.filter(u=>wa(u,g.date,reqs,"umpire")&&(!uu[u.id]||!uu[u.id].has(g.date)));
+    const slot=uuKey(g.date,g.time);
+    const avail=umps.filter(u=>wa(u,g.date,reqs,"umpire")&&(!uu[u.id]||!uu[u.id].has(slot)));
     const av=pickBest(avail,umpShifts);
     if(g.ump1===NONE&&av.length>0){
       const p=av.shift();g.ump1=p.id;
-      if(!uu[p.id])uu[p.id]=new Set();uu[p.id].add(g.date);
+      if(!uu[p.id])uu[p.id]=new Set();uu[p.id].add(slot);
       umpShifts[p.id]=(umpShifts[p.id]||0)+1;
     }
     if(isDual(g.division)&&g.ump2===NONE){
       const p=av.find(u=>u.id!==g.ump1);
-      if(p){g.ump2=p.id;if(!uu[p.id])uu[p.id]=new Set();uu[p.id].add(g.date);umpShifts[p.id]=(umpShifts[p.id]||0)+1}
+      if(p){g.ump2=p.id;if(!uu[p.id])uu[p.id]=new Set();uu[p.id].add(slot);umpShifts[p.id]=(umpShifts[p.id]||0)+1}
     }
   });
 

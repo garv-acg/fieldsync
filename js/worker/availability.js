@@ -1,10 +1,11 @@
-function AvailView({user,workers,updAvailByRole,updYears,updPhone}){
+function AvailView({user,workers,updAvailByRole,updYears,updPhone,updWorkerPassword}){
   const w=workers.find(x=>x.id===user.id);
   const myRoles=(w?.roles&&w.roles.length)?w.roles:(user.roles&&user.roles.length)?user.roles:[w?.role||user.role];
   const[activeRole,setActiveRole]=useState(myRoles[0]);
   const[yrs,setYrs]=useState(w?.yearsExp||0);
   const[phone,setPhone]=useState(w?.phone||"");
   const[saved,setSaved]=useState(false);
+  const[curPass,setCurPass]=useState(""),[newPass,setNewPass]=useState(""),[confirmPass,setConfirmPass]=useState(""),[passErr,setPassErr]=useState(""),[passSaved,setPassSaved]=useState(false);
 
   // Per-role availability state
   const initAvail=role=>(w?.availByRole&&w.availByRole[role])||w?.avail||[];
@@ -83,6 +84,23 @@ function AvailView({user,workers,updAvailByRole,updYears,updPhone}){
       R("button",{className:"btn btn-blue",style:{padding:"8px 20px"},onClick:save},
         saved?"✓ Saved!":"Save profile"
       )
+    ),
+    R("div",{className:"card",style:{marginTop:16}},
+      R("div",{style:{fontWeight:700,fontSize:15,marginBottom:16}},"Change Password"),
+      R("div",{className:"form-group"},R("label",{className:"form-label"},"Current password"),R("input",{className:"form-input",type:"password",value:curPass,onChange:e=>{setCurPass(e.target.value);setPassErr("")},placeholder:"Current password"})),
+      R("div",{className:"form-group"},R("label",{className:"form-label"},"New password"),R("input",{className:"form-input",type:"password",value:newPass,onChange:e=>{setNewPass(e.target.value);setPassErr("")},placeholder:"New password"})),
+      R("div",{className:"form-group"},R("label",{className:"form-label"},"Confirm new password"),R("input",{className:"form-input",type:"password",value:confirmPass,onChange:e=>{setConfirmPass(e.target.value);setPassErr("")},placeholder:"Confirm new password"})),
+      passErr&&R("div",{style:{color:"#F09090",fontSize:13,marginBottom:10}},passErr),
+      passSaved&&R("div",{style:{color:"#3DBA7B",fontSize:13,marginBottom:10}},"✓ Password updated!"),
+      R("button",{className:"btn btn-blue",style:{padding:"8px 20px"},onClick:()=>{
+        const liveW=workers.find(x=>x.id===user.id);
+        const storedPass=liveW?.password||w?.password||user.password;
+        if(curPass!==storedPass){setPassErr("Current password is incorrect");return;}
+        if(newPass.length<4){setPassErr("New password must be at least 4 characters");return;}
+        if(newPass!==confirmPass){setPassErr("Passwords don't match");return;}
+        updWorkerPassword(user.id,newPass);
+        setCurPass("");setNewPass("");setConfirmPass("");setPassSaved(true);setTimeout(()=>setPassSaved(false),3000);
+      }},"Update password")
     )
   );
 }

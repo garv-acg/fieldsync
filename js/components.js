@@ -50,12 +50,43 @@ function RsvpBtns({wId,date,locId,getRsvp,setRsvpStatus}){
     R("button",{className:"rsvp-btn rsvp-n"+(rs==="declined"?" on":""),onClick:()=>setRsvpStatus(wId,date,locId,"declined")},rs==="declined"?"✗ Can't make it":"Can't make it")
   );
 }
-function Login({onLogin}){
-  const[email,setE]=useState(""),[ pass,setP]=useState(""),[ tab,setTab]=useState("admin"),[err,setErr]=useState("");
+function Login({onLogin,liveWorkers}){
+  const[email,setE]=useState(""),[ pass,setP]=useState(""),[ tab,setTab]=useState("admin"),[err,setErr]=useState(""),[forgot,setForgot]=useState(false),[forgotEmail,setForgotEmail]=useState(""),[forgotSent,setForgotSent]=useState(false);
   const go=()=>{
-    if(tab==="admin"){if(email==="manager@field.com"&&pass==="admin")onLogin({id:0,name:"Field Manager",role:"overseer"});else setErr("manager@field.com / admin")}
-    else{const w=WORKERS.find(w=>w.email===email&&w.password===pass);if(w)onLogin(w);else setErr("Try jordan@crew.com / ump")}
+    if(tab==="admin"){if(email==="manager@field.com"&&pass==="admin")onLogin({id:0,name:"Field Manager",role:"overseer"});else setErr("Invalid credentials")}
+    else{
+      // Check live Supabase workers first, fall back to seed
+      const all=[...(liveWorkers||[]),...WORKERS];
+      const seen=new Set();
+      const deduped=all.filter(w=>{if(seen.has(w.id))return false;seen.add(w.id);return true;});
+      const w=deduped.find(w=>w.email===email&&w.password===pass);
+      if(w)onLogin(w);else setErr("Email or password incorrect");
+    }
   };
+  const submitForgot=()=>{
+    // Notify admin via a manager-targeted notification (workerId=0 shows to admin)
+    const msg="🔑 Password reset requested by "+forgotEmail+" — update their password in Staff > Workers.";
+    swrite(sb.from('notifications').insert([{id:Date.now(),worker_id:0,msg,time:new Date().toISOString(),read:false,type:"warn"}]));
+    setForgotSent(true);
+  };
+  if(forgot)return R("div",{className:"login-wrap"},R("div",{className:"login-card"},
+    R("div",{style:{textAlign:"center",marginBottom:24}},
+      R("div",{style:{fontWeight:800,fontSize:22}},"Field",R("span",{style:{color:"#4F7EF7"}},"Sync")),
+      R("p",{style:{color:"#9BA3BF",fontSize:13,marginTop:6}},"Password Reset")
+    ),
+    forgotSent
+      ?R("div",null,
+          R("div",{style:{color:"#3DBA7B",fontWeight:700,marginBottom:12}},"✓ Request sent!"),
+          R("p",{style:{color:"#9BA3BF",fontSize:13,marginBottom:16}},"Your manager has been notified and will update your password shortly."),
+          R("button",{className:"btn btn-sm",onClick:()=>{setForgot(false);setForgotSent(false);setForgotEmail("")}},"← Back to sign in")
+        )
+      :R("div",null,
+          R("p",{style:{color:"#9BA3BF",fontSize:13,marginBottom:16}},"Enter your email and we'll notify the manager to reset your password."),
+          R("div",{className:"form-group"},R("label",{className:"form-label"},"Email"),R("input",{className:"form-input",type:"email",value:forgotEmail,onChange:e=>setForgotEmail(e.target.value),placeholder:"your@email.com"})),
+          R("button",{className:"btn btn-blue",style:{width:"100%",justifyContent:"center",padding:"10px"},disabled:!forgotEmail,onClick:submitForgot},"Send reset request"),
+          R("button",{className:"btn btn-sm",style:{marginTop:10,width:"100%",justifyContent:"center"},onClick:()=>setForgot(false)},"← Back to sign in")
+        )
+  ));
   return R("div",{className:"login-wrap"},R("div",{className:"login-card"},
     R("div",{style:{textAlign:"center",marginBottom:24}},
       R("div",{style:{fontWeight:800,fontSize:22}},"Field",R("span",{style:{color:"#4F7EF7"}},"Sync")),
@@ -65,10 +96,12 @@ function Login({onLogin}){
       R("button",{className:"btn"+(tab==="admin"?" btn-blue":""),style:{flex:1,justifyContent:"center"},onClick:()=>{setTab("admin");setErr("")}},"Admin"),
       R("button",{className:"btn"+(tab==="worker"?" btn-blue":""),style:{flex:1,justifyContent:"center"},onClick:()=>{setTab("worker");setErr("")}},"Worker")
     ),
-    R("div",{className:"form-group"},R("label",{className:"form-label"},"Email"),R("input",{className:"form-input",type:"email",value:email,onChange:e=>setE(e.target.value),placeholder:tab==="admin"?"manager@field.com":"jordan@crew.com"})),
-    R("div",{className:"form-group"},R("label",{className:"form-label"},"Password"),R("input",{className:"form-input",type:"password",value:pass,onChange:e=>setP(e.target.value),placeholder:tab==="admin"?"admin":"ump",onKeyDown:e=>e.key==="Enter"&&go()})),
+    R("div",{className:"form-group"},R("label",{className:"form-label"},"Email"),R("input",{className:"form-input",type:"email",value:email,onChange:e=>setE(e.target.value),placeholder:tab==="admin"?"manager@field.com":"your@email.com"})),
+    R("div",{className:"form-group"},R("label",{className:"form-label"},"Password"),R("input",{className:"form-input",type:"password",value:pass,onChange:e=>setP(e.target.value),onKeyDown:e=>e.key==="Enter"&&go()})),
     err&&R("div",{style:{color:"#F09090",fontSize:12,marginBottom:12}},err),
     R("button",{className:"btn btn-blue",style:{width:"100%",justifyContent:"center",padding:"10px"},onClick:go},"Sign in"),
-    R("p",{style:{color:"#6B7394",fontSize:11,textAlign:"center",marginTop:12}},tab==="admin"?"manager@field.com / admin":"jordan@crew.com/ump · alex@crew.com/field · casey@crew.com/conc")
+    tab==="worker"&&R("div",{style:{textAlign:"center",marginTop:10}},
+      R("button",{className:"btn btn-sm",style:{fontSize:12,color:"#6B7394",background:"none",border:"none",cursor:"pointer"},onClick:()=>{setForgot(true);setErr("")}},"Forgot password?")
+    )
   ));
 }
