@@ -1,56 +1,79 @@
-function CalExportPicker({user,games,da,locs,isPub}){
-  const[open,setOpen]=useState(false);
-  const[subState,setSubState]=useState(null); // null | "loading" | {url} | "error"
-
-  const icsUrl=workerICSUrl(user.id);
-  const webcalUrl=icsUrl.replace("https://","webcal://");
-  const googleUrl="https://www.google.com/calendar/render?cid="+encodeURIComponent(webcalUrl);
+function CalendarModal({user,games,da,locs,isPub,onClose}){
+  const[subState,setSubState]=useState(null); // null | "loading" | {webcal,google} | "error"
 
   const doPublish=async()=>{
     setSubState("loading");
     try{
       await publishWorkerICS(user,games,da,locs,isPub);
-      setSubState({url:icsUrl});
+      const icsUrl=workerICSUrl(user.id);
+      const webcal=icsUrl.replace("https://","webcal://");
+      const google="https://www.google.com/calendar/render?cid="+encodeURIComponent(webcal);
+      setSubState({webcal,google});
     }catch(e){
       console.error("ICS publish failed",e);
       setSubState("error");
     }
   };
 
-  const dlOpts=[
-    {id:"apple",label:"Apple Calendar",icon:"🍎",hint:"Downloads .ics — open to add"},
-    {id:"google",label:"Google Calendar",icon:"📆",hint:"Downloads .ics — import at calendar.google.com"},
-    {id:"outlook",label:"Outlook",icon:"📧",hint:"Downloads .ics — open to add"},
-  ];
-
-  return R("div",{style:{position:"relative"}},
-    R("button",{className:"btn btn-blue",onClick:()=>{setOpen(p=>!p);setSubState(null)}},"📅 Calendar"),
-    open&&R("div",{style:{position:"absolute",right:0,top:"calc(100% + 6px)",background:"#181C27",border:"1px solid #2E3450",borderRadius:12,padding:12,zIndex:200,minWidth:260,boxShadow:"0 8px 32px rgba(0,0,0,.6)"}},
-      R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",marginBottom:8,letterSpacing:.06},""},
-        "Subscribe (auto-updates)"
-      ),
-      subState==="loading"&&R("div",{style:{fontSize:13,color:"#9BA3BF",padding:"8px 0"}},"Generating link…"),
-      subState==="error"&&R("div",{style:{fontSize:12,color:"#F09090",padding:"8px 0"}},"Storage bucket not set up yet. Ask your manager."),
-      (!subState||subState==="error")&&R("button",{className:"btn btn-blue btn-sm",style:{width:"100%",marginBottom:4},onClick:doPublish},"🔗 Generate subscribe link"),
-      subState&&subState.url&&R("div",{style:{marginBottom:4}},
-        R("div",{style:{fontSize:11,color:"#7DDBA8",marginBottom:6}},"✓ Link ready — choose your app:"),
-        R("a",{href:webcalUrl,style:{display:"block",padding:"7px 10px",background:"#252A3D",borderRadius:7,color:"#E8ECF8",fontSize:13,textDecoration:"none",marginBottom:4,textAlign:"center"},""},"🍎 Add to Apple Calendar"),
-        R("a",{href:googleUrl,target:"_blank",style:{display:"block",padding:"7px 10px",background:"#252A3D",borderRadius:7,color:"#E8ECF8",fontSize:13,textDecoration:"none",marginBottom:4,textAlign:"center"},""},"📆 Add to Google Calendar"),
-        R("button",{className:"btn btn-sm",style:{width:"100%"},onClick:()=>{navigator.clipboard.writeText(webcalUrl).then(()=>alert("Copied! Paste into Outlook → Add calendar from internet"))}},"📧 Copy link for Outlook")
-      ),
-      R("div",{style:{borderTop:"1px solid #2E3450",margin:"10px 0 8px"}}),
-      R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",marginBottom:6,letterSpacing:.06},""},"One-time download"),
-      dlOpts.map(o=>R("div",{key:o.id,onClick:()=>{exportICS(user,games,da,locs,isPub,o.id);setOpen(false)},style:{display:"flex",gap:8,alignItems:"center",padding:"7px 8px",borderRadius:7,cursor:"pointer"},
-        onMouseEnter:e=>e.currentTarget.style.background="#252A3D",
-        onMouseLeave:e=>e.currentTarget.style.background="transparent",
-      },
-        R("span",{style:{fontSize:16}},o.icon),
-        R("div",null,
-          R("div",{style:{fontSize:13,color:"#E8ECF8"}},o.label),
-          R("div",{style:{fontSize:10,color:"#6B7394"}},o.hint)
-        )
-      ))
+  const Row=(icon,label,hint,handleClick)=>R("div",{
+    onClick:handleClick,
+    style:{display:"flex",gap:12,alignItems:"center",padding:"12px 14px",borderRadius:9,cursor:"pointer",border:"1px solid #2E3450",background:"#1E2333",marginBottom:8},
+    onMouseEnter:e=>e.currentTarget.style.background="#252A3D",
+    onMouseLeave:e=>e.currentTarget.style.background="#1E2333",
+  },
+    R("span",{style:{fontSize:22,lineHeight:1,flexShrink:0}},icon),
+    R("div",null,
+      R("div",{style:{fontWeight:700,fontSize:13,color:"#E8ECF8"}},label),
+      R("div",{style:{fontSize:11,color:"#6B7394",marginTop:2}},hint)
     )
+  );
+
+  return R("div",{className:"modal-wrap",onClick:e=>e.target.className==="modal-wrap"&&onClose()},
+    R("div",{className:"modal",style:{maxWidth:380}},
+      R("div",{className:"modal-hdr"},
+        R("span",{className:"modal-title"},"Add to Calendar"),
+        R("button",{className:"btn btn-sm",onClick:onClose},"✕")
+      ),
+
+      R("div",{style:{background:"#1A2550",border:"1px solid #4F7EF7",borderRadius:10,padding:"12px 14px",marginBottom:16}},
+        R("div",{style:{fontWeight:700,fontSize:13,color:"#A8C0FC",marginBottom:4}},"Subscribe — stays up to date automatically"),
+        R("div",{style:{fontSize:12,color:"#6B7394"}},"When the schedule changes, your calendar updates. Recommended.")
+      ),
+
+      subState===null&&R("button",{className:"btn btn-blue",style:{width:"100%",padding:"10px",marginBottom:16,fontSize:14},onClick:doPublish},"🔗 Generate my calendar link"),
+      subState==="loading"&&R("div",{style:{textAlign:"center",padding:"16px 0",fontSize:13,color:"#9BA3BF",marginBottom:16}},"Generating link…"),
+      subState==="error"&&R("div",null,
+        R("div",{style:{background:"#3D1A1A",border:"1px solid #E05555",borderRadius:8,padding:"10px 12px",marginBottom:16,fontSize:12,color:"#F09090"}},
+          R("div",{style:{fontWeight:700,marginBottom:4}},"Storage not set up yet"),
+          "Ask the manager to create an ",R("code",null,"ics-feeds")," public bucket in Supabase Storage."
+        ),
+        R("button",{className:"btn btn-blue",style:{width:"100%",padding:"10px",marginBottom:16},onClick:doPublish},"Try again")
+      ),
+      subState&&subState.webcal&&R("div",{style:{marginBottom:16}},
+        R("div",{style:{fontSize:11,fontWeight:700,color:"#7DDBA8",textTransform:"uppercase",letterSpacing:.05,marginBottom:8}},"✓ Link ready — tap your app:"),
+        Row("🍎","Apple Calendar","Tap to open and subscribe",()=>{location.href=subState.webcal;}),
+        Row("📆","Google Calendar","Opens Google Calendar to subscribe",()=>{window.open(subState.google,"_blank");}),
+        Row("📧","Outlook","Copy link, then in Outlook: Add calendar → Subscribe from web",()=>{
+          navigator.clipboard.writeText(subState.webcal);
+          alert("Link copied!\n\nIn Outlook: Settings → Add calendar → Subscribe from web → paste the link.");
+        })
+      ),
+
+      R("div",{style:{borderTop:"1px solid #2E3450",paddingTop:14,marginBottom:8}}),
+      R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",letterSpacing:.05,marginBottom:10}},"Or download once"),
+      R("div",{style:{fontSize:12,color:"#6B7394",marginBottom:10}},"Downloads a .ics file. Apple Calendar imports it automatically. Google and Outlook require manual import."),
+      Row("🍎","Apple Calendar",".ics — imports automatically on Mac/iPhone",()=>{exportICS(user,games,da,locs,isPub,"apple");onClose();}),
+      Row("📆","Google Calendar",".ics — go to calendar.google.com → Settings → Import",()=>{exportICS(user,games,da,locs,isPub,"google");onClose();}),
+      Row("📧","Outlook",".ics — open the downloaded file to import",()=>{exportICS(user,games,da,locs,isPub,"outlook");onClose();})
+    )
+  );
+}
+
+function CalExportPicker({user,games,da,locs,isPub}){
+  const[open,setOpen]=useState(false);
+  return R("div",null,
+    R("button",{className:"btn btn-blue",onClick:()=>setOpen(true)},"📅 Calendar"),
+    open&&R(CalendarModal,{user,games,da,locs,isPub,onClose:()=>setOpen(false)})
   );
 }
 
