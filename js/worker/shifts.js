@@ -1,3 +1,31 @@
+function CalExportPicker({user,games,da,locs,isPub}){
+  const[open,setOpen]=useState(false);
+  const opts=[
+    {id:"apple",label:"Apple Calendar",icon:"🍎",hint:"Downloads .ics — open to import"},
+    {id:"google",label:"Google Calendar",icon:"📆",hint:"Downloads .ics — import via gcal.com"},
+    {id:"outlook",label:"Outlook",icon:"📧",hint:"Downloads .ics — open to import"},
+  ];
+  const pick=target=>{
+    exportICS(user,games,da,locs,isPub,target);
+    setOpen(false);
+  };
+  return R("div",{style:{position:"relative"}},
+    R("button",{className:"btn btn-blue",onClick:()=>setOpen(p=>!p)},"📅 Add to calendar"),
+    open&&R("div",{style:{position:"absolute",right:0,top:"calc(100% + 6px)",background:"#181C27",border:"1px solid #2E3450",borderRadius:12,padding:8,zIndex:200,minWidth:220,boxShadow:"0 8px 32px rgba(0,0,0,.6)"}},
+      opts.map(o=>R("div",{key:o.id,onClick:()=>pick(o.id),style:{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 12px",borderRadius:8,cursor:"pointer",transition:"background .1s"},
+        onMouseEnter:e=>e.currentTarget.style.background="#252A3D",
+        onMouseLeave:e=>e.currentTarget.style.background="transparent",
+      },
+        R("span",{style:{fontSize:20,lineHeight:1}},o.icon),
+        R("div",null,
+          R("div",{style:{fontWeight:700,fontSize:13,color:"#E8ECF8"}},o.label),
+          R("div",{style:{fontSize:11,color:"#6B7394"}},o.hint)
+        )
+      ))
+    )
+  );
+}
+
 function MyShifts({user,games,da,workers,locs,isPub,getRsvp,setRsvpStatus,requests,offerShift,claimShift,getDragger}){
   const today=new Date().toISOString().slice(0,10);
   const[showPast,setShowPast]=useState(false);
@@ -39,7 +67,7 @@ function MyShifts({user,games,da,workers,locs,isPub,getRsvp,setRsvpStatus,reques
         pastCount>0&&R("button",{className:"btn btn-sm"+(showPast?" btn-amber":""),onClick:()=>setShowPast(p=>!p)},
           showPast?"Hide past shifts":"Show past ("+pastCount+")"
         ),
-        R("button",{className:"btn btn-blue",onClick:()=>exportICS(user,games,da,locs)},"📅 Add to calendar")
+        R(CalExportPicker,{user,games,da,locs,isPub})
       )
     ),
 

@@ -427,6 +427,13 @@ function App(){
     {id:"availability",label:"Profile",icon:"👤"},
     {id:"notifications",label:"Alerts",icon:"🔔",badge:unread},
   ];
+  const adminBottomNav=[
+    {id:"today",label:"Today",icon:"📋"},
+    {id:"schedule",label:"Schedule",icon:"📅"},
+    {id:"staff",label:"Staff",icon:"👥",badge:conf.length},
+    {id:"requests",label:"Requests",icon:"✉️"},
+    {id:"reports",label:"Reports",icon:"📊"},
+  ];
   return R("div",{className:"app"},
     R("div",{className:"topbar"},
       R("div",{className:"logo"},"Field",R("span",null,"Sync")),
@@ -447,7 +454,7 @@ function App(){
         nav.map(item=>R("div",{key:item.id,className:"nav-item"+(view===item.id?" active":""),onClick:()=>setView(item.id)},item.label,item.badge>0&&R("span",{className:"nav-badge"},item.badge))),
         R("div",{className:"nav-bottom"},R("div",{className:"nav-item",style:{fontSize:12,color:"#6B7394"}},effectiveUser.name))
       ),
-      R("div",{className:"content"+(isWorker?" content-worker":"")},
+      R("div",{className:"content"+(isWorker?" content-worker":" content-admin")},
         view==="today"&&R(TodayView,sp),
         view==="schedule"&&R(SchedGamesView,sp),
         view==="staff"&&R(StaffView,sp),
@@ -458,8 +465,8 @@ function App(){
         view==="worker_home"&&R(WHome,sp),view==="my_shifts"&&R(MyShifts,sp),view==="my_requests"&&R(MyReqs,sp),view==="availability"&&R(AvailView,sp)
       )
     ),
-    isWorker&&R("nav",{className:"bottom-nav"},
-      workerBottomNav.map(item=>R("div",{key:item.id,className:"bn-item"+(view===item.id?" bn-active":""),onClick:()=>setView(item.id)},
+    R("nav",{className:"bottom-nav"},
+      (isWorker?workerBottomNav:adminBottomNav).map(item=>R("div",{key:item.id,className:"bn-item"+(view===item.id?" bn-active":""),onClick:()=>setView(item.id)},
         R("span",{className:"bn-icon",style:{position:"relative"}},item.icon,item.badge>0&&R("span",{className:"bn-badge"},item.badge)),
         R("span",{className:"bn-label"},item.label)
       ))

@@ -160,32 +160,52 @@ function parseTimeToHM(t){
   return{h,m:min};
 }
 function icsStamp(date,h,m){return date.replace(/-/g,"")+"T"+String(h).padStart(2,"0")+String(m).padStart(2,"0")+"00"}
-function exportICS(worker,games,da,locs){
-  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//FieldSync//EN","CALSCALE:GREGORIAN"];
-  if(worker.role==="umpire"){
-    games.filter(g=>g.status==="scheduled"&&(g.ump1===worker.id||g.ump2===worker.id)).forEach(g=>{
+function buildICS(worker,games,da,locs,isPub){
+  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//FieldSync//EN","CALSCALE:GREGORIAN","X-WR-CALNAME:FieldSync Shifts"];
+  const roles=(worker.roles&&worker.roles.length)?worker.roles:[worker.role];
+  if(roles.includes("umpire")){
+    games.filter(g=>g.status==="scheduled"&&(g.ump1===worker.id||g.ump2===worker.id)&&isPub(g.date)).forEach(g=>{
       const loc=locs.find(l=>l.id===g.locId),{h,m}=parseTimeToHM(g.time);
-      lines.push("BEGIN:VEVENT");
-      lines.push("UID:"+g.id+"-"+worker.id+"@fieldsync");
-      lines.push("DTSTART:"+icsStamp(g.date,h,m));
-      lines.push("DTEND:"+icsStamp(g.date,Math.min(h+2,23),m));
+      lines.push("BEGIN:VEVENT","UID:ump-"+g.id+"-"+worker.id+"@fieldsync");
+      lines.push("DTSTART:"+icsStamp(g.date,h,m),"DTEND:"+icsStamp(g.date,Math.min(h+2,23),m));
       lines.push("SUMMARY:"+g.division+" — Umpire ("+(loc?.name||"")+")");
-      lines.push("LOCATION:"+(loc?.name||"")+" "+(g.field||""));
-      lines.push("END:VEVENT");
+      lines.push("LOCATION:"+(loc?.name||"")+" "+(g.field||""),"END:VEVENT");
     });
-  } else {
-    const roleKey=worker.role==="field"?"fieldCrew":"concessions";
-    Object.entries(da).filter(([k,v])=>(v[roleKey]||[]).includes(worker.id)).forEach(([k])=>{
+  }
+  if(roles.includes("field")){
+    Object.entries(da).filter(([k,v])=>{const[date]=k.split("|");return(v.fieldCrew||[]).includes(worker.id)&&isPub(date)}).forEach(([k,v])=>{
       const[date,locId]=k.split("|"),loc=locs.find(l=>l.id===locId);
-      lines.push("BEGIN:VEVENT");
-      lines.push("UID:"+k+"-"+worker.id+"@fieldsync");
-      lines.push("DTSTART;VALUE=DATE:"+date.replace(/-/g,""));
-      lines.push("SUMMARY:"+rl(worker.role)+" shift — "+(loc?.name||""));
-      lines.push("LOCATION:"+(loc?.name||""));
-      lines.push("END:VEVENT");
+      const dayGames=games.filter(g=>g.date===date&&g.locId===locId&&g.status==="scheduled").sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
+      const t0=dayGames[0]?.time,tN=dayGames[dayGames.length-1]?.time;
+      const{h:sh,m:sm}=parseTimeToHM(t0||"9:00 AM"),{h:eh,m:em}=parseTimeToHM(tN||"9:00 AM");
+      lines.push("BEGIN:VEVENT","UID:field-"+k+"-"+worker.id+"@fieldsync");
+      lines.push("DTSTART:"+icsStamp(date,sh,sm),"DTEND:"+icsStamp(date,Math.min(eh+2,23),em));
+      lines.push("SUMMARY:Field Crew — "+(loc?.name||"")+" ("+dayGames.length+" game"+(dayGames.length!==1?"s":"")+")"  );
+      lines.push("LOCATION:"+(loc?.name||""),"END:VEVENT");
+    });
+  }
+  if(roles.includes("concessions")){
+    Object.entries(da).filter(([k,v])=>{const[date,locId]=k.split("|");const loc=locs.find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(worker.id)&&isPub(date)}).forEach(([k])=>{
+      const[date,locId]=k.split("|"),loc=locs.find(l=>l.id===locId);
+      const dayGames=games.filter(g=>g.date===date&&g.locId===locId&&g.status==="scheduled").sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
+      const t0=dayGames[0]?.time,tN=dayGames[dayGames.length-1]?.time;
+      const{h:sh,m:sm}=parseTimeToHM(t0||"9:00 AM"),{h:eh,m:em}=parseTimeToHM(tN||"9:00 AM");
+      lines.push("BEGIN:VEVENT","UID:conc-"+k+"-"+worker.id+"@fieldsync");
+      lines.push("DTSTART:"+icsStamp(date,sh,sm),"DTEND:"+icsStamp(date,Math.min(eh+2,23),em));
+      lines.push("SUMMARY:Snack Shack — "+(loc?.name||"")+" ("+dayGames.length+" game"+(dayGames.length!==1?"s":"")+")"  );
+      lines.push("LOCATION:"+(loc?.name||""),"END:VEVENT");
     });
   }
   lines.push("END:VCALENDAR");
-  const ics=lines.join("\r\n");
-  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));a.download="fieldsync-shifts.ics";a.click();
+  return lines.join("\r\n");
+}
+
+function exportICS(worker,games,da,locs,isPub,target){
+  const ics=buildICS(worker,games,da,locs,isPub||((d)=>true));
+  const blob=new Blob([ics],{type:"text/calendar"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=(target==="outlook"?"fieldsync-outlook.ics":"fieldsync-shifts.ics");
+  a.click();
 }

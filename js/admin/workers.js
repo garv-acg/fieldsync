@@ -47,7 +47,7 @@ function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig
           isEditing&&R(WorkerEditRow,{key:w.id+"-edit",w,workerRoles,ALL_ROLES,globalRate,updWorkerRoles,updWorkerPayRate,updWorkerPassword})
         ];
       }))
-    ))
+    )))
   );
 }
 

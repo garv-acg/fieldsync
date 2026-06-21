@@ -123,4 +123,5 @@ body{font-family:system-ui,sans-serif;background:#0F1117;color:#E8E9ED;font-size
 .topbar-badges{display:inline-flex;gap:4px;align-items:center}
 @media(max-width:640px){
   .topbar-badges{display:none}
+  .content-admin{padding-bottom:76px}
 }
