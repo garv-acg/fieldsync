@@ -11,7 +11,7 @@ function CalendarModal({user,games,da,locs,isPub,onClose}){
       setSubState({webcal,google});
     }catch(e){
       console.error("ICS publish failed",e);
-      setSubState("error");
+      setSubState({error:e?.message||e?.error||JSON.stringify(e)});
     }
   };
 
@@ -42,10 +42,10 @@ function CalendarModal({user,games,da,locs,isPub,onClose}){
 
       subState===null&&R("button",{className:"btn btn-blue",style:{width:"100%",padding:"10px",marginBottom:16,fontSize:14},onClick:doPublish},"🔗 Generate my calendar link"),
       subState==="loading"&&R("div",{style:{textAlign:"center",padding:"16px 0",fontSize:13,color:"#9BA3BF",marginBottom:16}},"Generating link…"),
-      subState==="error"&&R("div",null,
+      subState?.error&&R("div",null,
         R("div",{style:{background:"#3D1A1A",border:"1px solid #E05555",borderRadius:8,padding:"10px 12px",marginBottom:16,fontSize:12,color:"#F09090"}},
-          R("div",{style:{fontWeight:700,marginBottom:4}},"Storage not set up yet"),
-          "Ask the manager to create an ",R("code",null,"ics-feeds")," public bucket in Supabase Storage."
+          R("div",{style:{fontWeight:700,marginBottom:4}},"Upload failed"),
+          subState.error
         ),
         R("button",{className:"btn btn-blue",style:{width:"100%",padding:"10px",marginBottom:16},onClick:doPublish},"Try again")
       ),
