@@ -227,12 +227,15 @@ const SUPABASE_URL="https://aknynshszfxxkspkokru.supabase.co";
 async function publishWorkerICS(worker,games,da,locs,isPub,getDragger){
   const ics=buildICS(worker,games,da,locs,isPub||((d)=>true),getDragger);
   const blob=new Blob([ics],{type:"text/calendar"});
-  const path=worker.id+".ics";
-  const{error}=await sb.storage.from(ICS_BUCKET).upload(path,blob,{upsert:true,contentType:"text/calendar"});
+  const version=Date.now();
+  const path=worker.id+"-"+version+".ics";
+  const{error}=await sb.storage.from(ICS_BUCKET).upload(path,blob,{contentType:"text/calendar",cacheControl:"0"});
   if(error)throw error;
+  // clean up old versions (best effort)
+  sb.storage.from(ICS_BUCKET).list().then(({data})=>{
+    if(!data)return;
+    const old=data.filter(f=>f.name.startsWith(worker.id+"-")&&f.name!==path);
+    if(old.length)sb.storage.from(ICS_BUCKET).remove(old.map(f=>f.name));
+  });
   return SUPABASE_URL+"/storage/v1/object/public/"+ICS_BUCKET+"/"+path;
-}
-
-function workerICSUrl(workerId){
-  return SUPABASE_URL+"/storage/v1/object/public/"+ICS_BUCKET+"/"+workerId+".ics";
 }

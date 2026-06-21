@@ -4,8 +4,7 @@ function CalendarModal({user,games,da,locs,isPub,getDragger,onClose}){
   const doPublish=async()=>{
     setSubState("loading");
     try{
-      await publishWorkerICS(user,games,da,locs,isPub,getDragger);
-      const icsUrl=workerICSUrl(user.id);
+      const icsUrl=await publishWorkerICS(user,games,da,locs,isPub,getDragger);
       const webcal=icsUrl.replace("https://","webcal://");
       const google="https://www.google.com/calendar/render?cid="+encodeURIComponent(webcal);
       setSubState({webcal,google});
@@ -36,8 +35,8 @@ function CalendarModal({user,games,da,locs,isPub,getDragger,onClose}){
       ),
 
       R("div",{style:{background:"#1A2550",border:"1px solid #4F7EF7",borderRadius:10,padding:"12px 14px",marginBottom:16}},
-        R("div",{style:{fontWeight:700,fontSize:13,color:"#A8C0FC",marginBottom:4}},"Subscribe — stays up to date automatically"),
-        R("div",{style:{fontSize:12,color:"#6B7394"}},"When the schedule changes, your calendar updates. Recommended.")
+        R("div",{style:{fontWeight:700,fontSize:13,color:"#A8C0FC",marginBottom:4}},"Subscribe to your shifts"),
+        R("div",{style:{fontSize:12,color:"#6B7394"}},"Generates a fresh calendar link. Remove your old FieldSync calendar first, then add the new link.")
       ),
 
       subState===null&&R("button",{className:"btn btn-blue",style:{width:"100%",padding:"10px",marginBottom:16,fontSize:14},onClick:doPublish},"🔗 Generate my calendar link"),
