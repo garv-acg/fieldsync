@@ -167,7 +167,8 @@ const VTIMEZONE=[
   "BEGIN:DAYLIGHT","DTSTART:19870405T020000","RRULE:FREQ=YEARLY;BYDAY=2SU;BYMONTH=3","TZNAME:MDT","TZOFFSETFROM:-0700","TZOFFSETTO:-0600","END:DAYLIGHT",
   "END:VTIMEZONE"
 ];
-function buildICS(worker,games,da,locs,isPub){
+function shiftMin(h,m,delta){const t=h*60+m+delta;return{h:Math.floor(t/60),m:((t%60)+60)%60};}
+function buildICS(worker,games,da,locs,isPub,getDragger){
   const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//FieldSync//EN","CALSCALE:GREGORIAN","X-WR-CALNAME:FieldSync Shifts","X-WR-TIMEZONE:"+ICS_TZ,...VTIMEZONE];
   const roles=(worker.roles&&worker.roles.length)?worker.roles:[worker.role];
   if(roles.includes("umpire")){
@@ -184,10 +185,13 @@ function buildICS(worker,games,da,locs,isPub){
       const[date,locId]=k.split("|"),loc=locs.find(l=>l.id===locId);
       const dayGames=games.filter(g=>g.date===date&&g.locId===locId&&g.status==="scheduled").sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
       const t0=dayGames[0]?.time,tN=dayGames[dayGames.length-1]?.time;
-      const{h:sh,m:sm}=parseTimeToHM(t0||"9:00 AM"),{h:eh,m:em}=parseTimeToHM(tN||"9:00 AM");
+      const{h:fh,m:fm}=parseTimeToHM(t0||"9:00 AM"),{h:eh,m:em}=parseTimeToHM(tN||"9:00 AM");
+      const isDragger=getDragger&&getDragger(date,locId)===worker.id;
+      const{h:sh,m:sm}=shiftMin(fh,fm,isDragger?-150:-120);
+      const summary=(isDragger?"🚜 Dragger":"Field Crew")+" — "+(loc?.name||"")+" ("+dayGames.length+" game"+(dayGames.length!==1?"s":"")+")"  ;
       lines.push("BEGIN:VEVENT","UID:field-"+k+"-"+worker.id+"@fieldsync");
       lines.push("DTSTART;TZID="+ICS_TZ+":"+icsStamp(date,sh,sm),"DTEND;TZID="+ICS_TZ+":"+icsStamp(date,Math.min(eh+2,23),em));
-      lines.push("SUMMARY:Field Crew — "+(loc?.name||"")+" ("+dayGames.length+" game"+(dayGames.length!==1?"s":"")+")"  );
+      lines.push("SUMMARY:"+summary);
       lines.push("LOCATION:"+(loc?.name||""),"END:VEVENT");
     });
   }
@@ -207,8 +211,8 @@ function buildICS(worker,games,da,locs,isPub){
   return lines.join("\r\n");
 }
 
-function exportICS(worker,games,da,locs,isPub,target){
-  const ics=buildICS(worker,games,da,locs,isPub||((d)=>true));
+function exportICS(worker,games,da,locs,isPub,target,getDragger){
+  const ics=buildICS(worker,games,da,locs,isPub||((d)=>true),getDragger);
   const blob=new Blob([ics],{type:"text/calendar"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
@@ -220,8 +224,8 @@ function exportICS(worker,games,da,locs,isPub,target){
 const ICS_BUCKET="ics-feeds";
 const SUPABASE_URL="https://aknynshszfxxkspkokru.supabase.co";
 
-async function publishWorkerICS(worker,games,da,locs,isPub){
-  const ics=buildICS(worker,games,da,locs,isPub||((d)=>true));
+async function publishWorkerICS(worker,games,da,locs,isPub,getDragger){
+  const ics=buildICS(worker,games,da,locs,isPub||((d)=>true),getDragger);
   const blob=new Blob([ics],{type:"text/calendar"});
   const path=worker.id+".ics";
   const{error}=await sb.storage.from(ICS_BUCKET).upload(path,blob,{upsert:true,contentType:"text/calendar"});

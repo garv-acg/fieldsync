@@ -1,10 +1,10 @@
-function CalendarModal({user,games,da,locs,isPub,onClose}){
+function CalendarModal({user,games,da,locs,isPub,getDragger,onClose}){
   const[subState,setSubState]=useState(null); // null | "loading" | {webcal,google} | "error"
 
   const doPublish=async()=>{
     setSubState("loading");
     try{
-      await publishWorkerICS(user,games,da,locs,isPub);
+      await publishWorkerICS(user,games,da,locs,isPub,getDragger);
       const icsUrl=workerICSUrl(user.id);
       const webcal=icsUrl.replace("https://","webcal://");
       const google="https://www.google.com/calendar/render?cid="+encodeURIComponent(webcal);
@@ -62,18 +62,18 @@ function CalendarModal({user,games,da,locs,isPub,onClose}){
       R("div",{style:{borderTop:"1px solid #2E3450",paddingTop:14,marginBottom:8}}),
       R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",letterSpacing:.05,marginBottom:10}},"Or download once"),
       R("div",{style:{fontSize:12,color:"#6B7394",marginBottom:10}},"Downloads a .ics file. Apple Calendar imports it automatically. Google and Outlook require manual import."),
-      Row("🍎","Apple Calendar",".ics — imports automatically on Mac/iPhone",()=>{exportICS(user,games,da,locs,isPub,"apple");onClose();}),
-      Row("📆","Google Calendar",".ics — go to calendar.google.com → Settings → Import",()=>{exportICS(user,games,da,locs,isPub,"google");onClose();}),
-      Row("📧","Outlook",".ics — open the downloaded file to import",()=>{exportICS(user,games,da,locs,isPub,"outlook");onClose();})
+      Row("🍎","Apple Calendar",".ics — imports automatically on Mac/iPhone",()=>{exportICS(user,games,da,locs,isPub,"apple",getDragger);onClose();}),
+      Row("📆","Google Calendar",".ics — go to calendar.google.com → Settings → Import",()=>{exportICS(user,games,da,locs,isPub,"google",getDragger);onClose();}),
+      Row("📧","Outlook",".ics — open the downloaded file to import",()=>{exportICS(user,games,da,locs,isPub,"outlook",getDragger);onClose();})
     )
   );
 }
 
-function CalExportPicker({user,games,da,locs,isPub}){
+function CalExportPicker({user,games,da,locs,isPub,getDragger}){
   const[open,setOpen]=useState(false);
   return R("div",null,
     R("button",{className:"btn btn-blue",onClick:()=>setOpen(true)},"📅 Calendar"),
-    open&&R(CalendarModal,{user,games,da,locs,isPub,onClose:()=>setOpen(false)})
+    open&&R(CalendarModal,{user,games,da,locs,isPub,getDragger,onClose:()=>setOpen(false)})
   );
 }
 
@@ -118,7 +118,7 @@ function MyShifts({user,games,da,workers,locs,isPub,getRsvp,setRsvpStatus,reques
         pastCount>0&&R("button",{className:"btn btn-sm"+(showPast?" btn-amber":""),onClick:()=>setShowPast(p=>!p)},
           showPast?"Hide past shifts":"Show past ("+pastCount+")"
         ),
-        R(CalExportPicker,{user,games,da,locs,isPub})
+        R(CalExportPicker,{user,games,da,locs,isPub,getDragger})
       )
     ),
 
