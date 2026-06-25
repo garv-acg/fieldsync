@@ -48,7 +48,7 @@ function App(){
       setWorkers((w.data||[]).map(rowToWorker));
       setLocs((l.data||[]).map(rowToLoc));
       setGames((g.data||[]).map(rowToGame));
-      const ndaMap={};(d.data||[]).forEach(row=>{ndaMap[row.date+"|"+row.loc_id]={fieldCrew:row.field_crew||[],concessions:row.concessions||[],concessionsHours:row.concessions_hours||{},snackShackOpen:row.snack_shack_open??true}});
+      const ndaMap={};(d.data||[]).forEach(row=>{ndaMap[row.date+"|"+row.loc_id]={fieldCrew:row.field_crew||[],concessions:row.concessions||[],concessionsHours:row.concessions_hours||{},concessionsShifts:row.concessions_shifts||{},snackShackOpen:row.snack_shack_open??true}});
       setDA(ndaMap);
       setPub(new Set((p.data||[]).map(row=>row.week_key)));
       const rsvpMap={};(r.data||[]).forEach(row=>{rsvpMap[row.worker_id+"_"+row.date+"_"+row.loc_id]=row.status});
@@ -79,7 +79,7 @@ function App(){
       .on('postgres_changes',{event:'*',schema:'public',table:'day_assignments'},({eventType,new:nw,old})=>{
         const key=eventType==='DELETE'?old.date+"|"+old.loc_id:nw.date+"|"+nw.loc_id;
         if(eventType==='DELETE')setDA(p=>{const c={...p};delete c[key];return c});
-        else setDA(p=>({...p,[key]:{fieldCrew:nw.field_crew||[],concessions:nw.concessions||[],concessionsHours:nw.concessions_hours||{}}}));
+        else setDA(p=>({...p,[key]:{fieldCrew:nw.field_crew||[],concessions:nw.concessions||[],concessionsHours:nw.concessions_hours||{},concessionsShifts:nw.concessions_shifts||{},snackShackOpen:nw.snack_shack_open??true}}));
       })
       .on('postgres_changes',{event:'*',schema:'public',table:'published_weeks'},({eventType,new:nw,old})=>{
         if(eventType==='DELETE')setPub(p=>{const c=new Set(p);c.delete(old.week_key);return c});
@@ -227,6 +227,12 @@ function App(){
     setDA(p=>{const prev=p[k]||{fieldCrew:[],concessions:[],concessionsHours:{}};const ch={...prev.concessionsHours,[wId]:hours};return{...p,[k]:{...prev,concessionsHours:ch}}});
     const ch={...(da[dk(date,locId)]?.concessionsHours||{}),[wId]:hours};
     swrite(sb.from('day_assignments').upsert({date,loc_id:locId,concessions_hours:ch}));
+  };
+  const updConcessionsShift=(date,locId,wId,start,end)=>{
+    const k=dk(date,locId);
+    setDA(p=>{const prev=p[k]||{fieldCrew:[],concessions:[],concessionsHours:{},concessionsShifts:{}};const cs={...prev.concessionsShifts,[wId]:{start,end}};return{...p,[k]:{...prev,concessionsShifts:cs}}});
+    const cs={...(da[dk(date,locId)]?.concessionsShifts||{}),[wId]:{start,end}};
+    swrite(sb.from('day_assignments').upsert({date,loc_id:locId,concessions_shifts:cs}));
   };
   const updSnackShackOpen=(date,locId,open)=>{
     const k=dk(date,locId);
@@ -425,7 +431,7 @@ function App(){
   const adminNav=[{id:"today",label:"Today"},{id:"schedule",label:"Schedule"},{id:"staff",label:"Staff",badge:conf.length},{id:"requests",label:"Requests",badge:pendingR},{id:"reports",label:"Reports"},{id:"settings",label:"Settings"}];
   const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"notifications",label:"Notifications",badge:unread}];
   const nav=effectiveUser.role==="overseer"?adminNav:workerNav;
-  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updSnackShackOpen,updWorkerRoles,updWorkerPayRate,addWorker,updWorkerPassword};
+  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updConcessionsShift,updSnackShackOpen,updWorkerRoles,updWorkerPayRate,addWorker,updWorkerPassword};
   const isWorker=effectiveUser.role!=="overseer";
   const workerBottomNav=[
     {id:"worker_home",label:"Home",icon:"🏠"},

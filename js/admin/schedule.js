@@ -131,7 +131,7 @@ function SaturdayView({games,workers,da,locs,pub}){
   );
 }
 
-function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAuto,setModal,setUmp,updDA,updSnackShackOpen,setGS,rainout,getDragger,setDraggerOverride,draggerOverrides,sendReminders}){
+function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAuto,setModal,setUmp,updDA,updSnackShackOpen,updConcessionsShift,setGS,rainout,getDragger,setDraggerOverride,draggerOverrides,sendReminders}){
   const[lf,setLf]=useState("all");
   const[showPast,setShowPast]=useState(false);
   const todayWk=wkKey(new Date().toISOString().slice(0,10));
@@ -243,7 +243,7 @@ function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAu
                     )
                   );
                 }),
-                R(CrewPanel,{date,locId:loc.id,da,workers,updDA,updSnackShackOpen,loc}),
+                R(CrewPanel,{date,locId:loc.id,da,workers,updDA,updSnackShackOpen,updConcessionsShift,loc}),
                 crew.length>0&&R("div",{style:{display:"flex",alignItems:"center",gap:8,marginTop:6,padding:"6px 10px",background:"#1A1F2E",borderRadius:7,border:"1px solid #2A3050"}},
                   R("span",{style:{fontSize:12,color:"#9BA3BF"}},"🚜 Dragger:"),
                   R("select",{

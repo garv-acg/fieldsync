@@ -38,7 +38,7 @@ function CalendarModal({user,games,da,locs,isPub,getDragger,onClose}){
       R("div",{style:{background:"#1A2550",border:"1px solid #4F7EF7",borderRadius:10,padding:"12px 14px",marginBottom:16}},
         R("div",{style:{fontWeight:700,fontSize:13,color:"#A8C0FC",marginBottom:4}},"Subscribe to your shifts"),
         R("div",{style:{fontSize:12,color:"#6B7394"}},"Subscribe once. When the manager publishes changes, your calendar updates automatically within an hour."))
-      ),
+      ,
 
       subState===null&&R("button",{className:"btn btn-blue",style:{width:"100%",padding:"10px",marginBottom:16,fontSize:14},onClick:doPublish},"🔗 Generate my calendar link"),
       subState==="loading"&&R("div",{style:{textAlign:"center",padding:"16px 0",fontSize:13,color:"#9BA3BF",marginBottom:16}},"Generating link…"),

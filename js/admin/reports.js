@@ -1,6 +1,17 @@
 // ── Pay calculation helpers ────────────────────────────────────────
 function workerRoles(w){return(w.roles&&w.roles.length)?w.roles:[w.role]}
 
+function shiftHours(da,k,wId){
+  const manual=(da[k]?.concessionsHours||{})[wId];
+  if(manual!=null&&manual>0)return manual;
+  const s=(da[k]?.concessionsShifts||{})[wId];
+  if(s?.start&&s?.end){
+    const[sh,sm]=s.start.split(":").map(Number),[eh,em]=s.end.split(":").map(Number);
+    return Math.max(0,(eh*60+em-sh*60-sm)/60);
+  }
+  return 0;
+}
+
 function effectiveRate(w,role,payConfig){
   const r=(w.payRates||{})[role];
   if(r!=null)return r;
@@ -26,7 +37,7 @@ function computePayRows(workers,games,da,payConfig,filterDates,locs){
     if(roles.includes("concessions")){
       const shifts=Object.entries(da).filter(([k,v])=>{const[d,locId]=k.split("|");const loc=(locs||[]).find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(w.id)&&inRange(d)});
       const rate=effectiveRate(w,"concessions",payConfig);
-      const hours=shifts.reduce((sum,[k,v])=>sum+((v.concessionsHours||{})[w.id]||0),0);
+      const hours=shifts.reduce((sum,[k])=>sum+shiftHours(da,k,w.id),0);
       entries.push({role:"concessions",label:"Concessions",count:shifts.length,hours,rate,total:hours*rate});
     }
     const grandTotal=entries.reduce((s,e)=>s+e.total,0);
@@ -76,7 +87,7 @@ function SeasonTab({workers,games,da,rsvp}){
 }
 
 // ── Pay tab ────────────────────────────────────────────────────────
-function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,locs}){
+function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,updWorkerPayRate,locs}){
   const[scope,setScope]=useState("week"); // "week" | "season"
   const[weekStart,setWeekStart]=useState(()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());return d.toISOString().slice(0,10)});
   const[showRates,setShowRates]=useState(false);
@@ -94,7 +105,7 @@ function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,loc
   const fmtDate=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 
   // Concessions hours logger (week scope only)
-  const concDays=scope==="week"?Object.entries(da).filter(([k])=>{const[d,locId]=k.split("|");const loc=(locs||[]).find(l=>l.id===locId);return loc?.hasSnackShack&&filterDates.has(d)&&(da[k].concessions||[]).length>0}):[];
+  const concDays=scope==="week"?Object.entries(da).filter(([k])=>{const[d,locId]=k.split("|");const loc=(locs||[]).find(l=>l.id===locId);return loc?.hasSnackShack&&filterDates.has(d)&&(da[k].concessions||[]).length>0&&da[k].snackShackOpen!==false}).sort(([a],[b])=>a.localeCompare(b)):[];
 
   const saveRates=()=>{updPayConfig({umpireRate:+rateInputs.umpireRate||0,fieldRate:+rateInputs.fieldRate||0,concessionsRate:+rateInputs.concessionsRate||0})};
 
@@ -245,11 +256,15 @@ function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,loc
                   )),
                   R("td",{style:{padding:"10px 10px",verticalAlign:"top"}},
                     R("div",null,r.entries.map(e=>
-                      R("div",{key:e.role,style:{fontSize:12,color:"#9BA3BF",marginBottom:2}},
-                        e.label+": ",
+                      R("div",{key:e.role,style:{fontSize:12,color:"#9BA3BF",marginBottom:4,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
+                        R("span",null,e.label+": "),
                         e.role==="concessions"
-                          ? e.hours>0?(e.hours.toFixed(2)+"h × $"+e.rate+"/hr = $"+e.total.toFixed(2)):"0h logged"
-                          : e.count+(e.role==="umpire"?" game":" shift")+(e.count!==1?"s":"")+" × $"+e.rate+" = $"+e.total.toFixed(2)
+                          ? R("span",null,e.hours>0?e.hours.toFixed(2)+"h × ":"0h logged")
+                          : R("span",null,e.count+(e.role==="umpire"?" game":" shift")+(e.count!==1?"s":"")+" × "),
+                        R(WorkerRateInput,{key:r.worker.id+"-"+e.role,w:r.worker,role:e.role,payConfig,updWorkerPayRate}),
+                        e.role==="concessions"
+                          ? (e.hours>0?R("span",null," = $"+e.total.toFixed(2)):null)
+                          : R("span",null," = $"+e.total.toFixed(2))
                       )
                     ))
                   ),
@@ -266,17 +281,47 @@ function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,loc
   );
 }
 
+function WorkerRateInput({w,role,payConfig,updWorkerPayRate}){
+  const globalRate=r=>role==="umpire"?payConfig.umpireRate:role==="field"?payConfig.fieldRate:payConfig.concessionsRate;
+  const current=(w.payRates||{})[role];
+  const[val,setVal]=useState(current!=null?String(current):"");
+  React.useEffect(()=>{setVal(current!=null?String(current):"");},[current]);
+  const placeholder=String(globalRate(role));
+  const unit=role==="concessions"?"/hr":role==="umpire"?"/game":"/shift";
+  const save=()=>{
+    const v=val.trim();
+    const n=v===""?null:parseFloat(v);
+    updWorkerPayRate(w.id,role,isNaN(n)?null:n);
+  };
+  return R("span",{style:{display:"inline-flex",alignItems:"center",gap:2}},
+    R("span",{style:{color:"#9BA3BF"}},"$"),
+    R("input",{type:"number",min:0,step:0.5,value:val,
+      placeholder,
+      onChange:e=>setVal(e.target.value),
+      onBlur:save,
+      title:"Leave blank to use default ("+placeholder+")",
+      style:{width:56,padding:"2px 4px",borderRadius:4,border:"1px solid #2E3450",background:"#1A2035",color:"#E8ECF8",fontSize:12}}),
+    R("span",{style:{color:"#6B7394",fontSize:11}},unit)
+  );
+}
+
 function ConcessionsHoursInput({w,date,locId,da,updConcessionsHours}){
-  const current=(da[dk(date,locId)]?.concessionsHours||{})[w.id]||0;
-  const[val,setVal]=useState(current===0?"":String(current));
+  const k=dk(date,locId);
+  const manual=(da[k]?.concessionsHours||{})[w.id];
+  const shift=(da[k]?.concessionsShifts||{})[w.id];
+  const autoHours=(()=>{if(shift?.start&&shift?.end){const[sh,sm]=shift.start.split(":").map(Number),[eh,em]=shift.end.split(":").map(Number);return Math.max(0,(eh*60+em-sh*60-sm)/60);}return null;})();
+  const[val,setVal]=useState(manual!=null&&manual>0?String(manual):"");
+  React.useEffect(()=>{setVal(manual!=null&&manual>0?String(manual):"");},[manual]);
   const save=()=>{const h=parseFloat(val)||0;updConcessionsHours(date,locId,w.id,h)};
+  const shiftLabel=shift?.start&&shift?.end?shift.start+" – "+shift.end:null;
   return R("div",{style:{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-start"}},
     R("div",{style:{fontSize:12,color:"#E8ECF8",fontWeight:600}},w.name),
+    shiftLabel&&R("div",{style:{fontSize:10,color:"#6B7394"}},shiftLabel+(autoHours!=null?" ("+autoHours.toFixed(2)+"h auto":""+(autoHours!=null?")":"))),
     R("div",{style:{display:"flex",gap:6,alignItems:"center"}},
       R("input",{type:"number",min:0,step:0.25,value:val,onChange:e=>setVal(e.target.value),onBlur:save,
-        placeholder:"hrs",
+        placeholder:autoHours!=null?autoHours.toFixed(2):"hrs",
         style:{width:70,padding:"5px 8px",borderRadius:6,border:"1px solid #2E3450",background:"#1E2333",color:"#E8ECF8",fontSize:13}}),
-      R("span",{style:{fontSize:11,color:"#6B7394"}},"hrs")
+      R("span",{style:{fontSize:11,color:"#6B7394"}},val?"hrs (override)":"hrs")
     )
   );
 }

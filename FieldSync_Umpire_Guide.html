@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FieldSync — Manager Umpire Guide</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #fff; color: #374151; font-size: 12.5px; line-height: 1.6;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .page { width: 8.5in; min-height: 11in; margin: 0 auto; page-break-after: always; display: flex; flex-direction: column; }
+
+  /* Cover */
+  .cover {
+    background: linear-gradient(155deg, #0d2444 0%, #1a3f7a 55%, #1e4fa0 100%);
+    flex: 1; display: flex; flex-direction: column; justify-content: center;
+    align-items: flex-start; padding: 1in 1.1in; position: relative; overflow: hidden;
+  }
+  .cover::after {
+    content: ''; position: absolute; right: -0.8in; top: 50%; transform: translateY(-50%);
+    width: 4.5in; height: 4.5in; border-radius: 50%;
+    background: radial-gradient(circle, rgba(96,165,250,0.15) 0%, transparent 65%);
+  }
+  .cover-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: #60a5fa; margin-bottom: 20px; }
+  .cover-logo { font-size: 44px; font-weight: 800; color: #fff; letter-spacing: -1.5px; margin-bottom: 4px; }
+  .cover-logo span { color: #60a5fa; }
+  .cover-title { font-size: 26px; font-weight: 300; color: #bfdbfe; margin-bottom: 36px; }
+  .cover-rule { width: 48px; height: 3px; background: #3b82f6; border-radius: 2px; margin-bottom: 28px; }
+  .cover-desc { font-size: 14px; color: #93c5fd; line-height: 1.8; max-width: 4in; margin-bottom: 48px; }
+  .cover-tags { display: flex; gap: 10px; flex-wrap: wrap; }
+  .cover-tag { font-size: 10.5px; color: #bfdbfe; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; padding: 4px 12px; }
+  .cover-footer {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 14px 1.1in; display: flex; justify-content: space-between;
+    border-top: 1px solid rgba(255,255,255,0.1); font-size: 10.5px; color: #6b8db8;
+  }
+
+  /* Content pages */
+  .page-header {
+    background: #0d2444; padding: 10px 0.65in;
+    display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+  }
+  .ph-logo { font-size: 13px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+  .ph-logo span { color: #60a5fa; }
+  .ph-right { text-align: right; }
+  .ph-title { font-size: 10px; color: #93c5fd; letter-spacing: 0.4px; }
+  .ph-section { font-size: 9px; color: #4a6fa5; margin-top: 1px; }
+
+  .body { padding: 0.38in 0.65in 0.42in; flex: 1; }
+
+  .section-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #3b82f6; margin-bottom: 3px; }
+  h1 { font-size: 19px; font-weight: 700; color: #0d2444; margin-bottom: 4px; }
+  .rule { width: 100%; height: 1.5px; background: linear-gradient(to right, #3b82f6 0%, #e5e7eb 60%); margin-bottom: 14px; }
+  h2 { font-size: 11.5px; font-weight: 700; color: #1d4ed8; margin: 13px 0 4px; }
+  h2.teal  { color: #0d9488; }
+  h2.amber { color: #92400e; }
+  h2.rose  { color: #be123c; }
+  p { margin-bottom: 6px; font-size: 12px; }
+  strong { color: #111827; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .divider { height: 1px; background: #e5e7eb; margin: 15px 0; }
+
+  /* Steps */
+  .step { display: flex; gap: 9px; margin-bottom: 5px; align-items: flex-start; }
+  .step-num {
+    width: 18px; height: 18px; border-radius: 50%; background: #eff6ff; color: #1d4ed8;
+    font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .step-text { font-size: 12px; line-height: 1.5; }
+
+  /* Pills */
+  .pill { border-radius: 6px; padding: 7px 11px; margin: 8px 0; font-size: 11.5px; line-height: 1.45; }
+  .pill-blue  { background: #eff6ff; border-left: 3px solid #3b82f6; color: #1e40af; }
+  .pill-amber { background: #fffbeb; border-left: 3px solid #f59e0b; color: #92400e; }
+  .pill-rose  { background: #fff1f2; border-left: 3px solid #f43f5e; color: #9f1239; }
+
+  /* Conflict example */
+  .conflict-badge {
+    background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px;
+    padding: 8px 12px; font-size: 11.5px; color: #be123c; font-weight: 600; margin: 8px 0;
+  }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 11.5px; border-radius: 7px; overflow: hidden; border: 1px solid #e5e7eb; }
+  thead tr { background: #0d2444; }
+  thead th { padding: 8px 10px; text-align: left; color: #fff; font-weight: 600; font-size: 10.5px; }
+  tbody tr:nth-child(even) { background: #f8faff; }
+  tbody td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; font-size: 11.5px; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  /* Checklists */
+  .checklist { border-radius: 8px; padding: 13px 15px; }
+  .checklist-title { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+  .checklist ul { list-style: none; padding: 0; }
+  .checklist ul li { padding: 3px 0 3px 20px; position: relative; font-size: 11.5px; line-height: 1.5; border-bottom: 1px solid rgba(0,0,0,0.05); }
+  .checklist ul li:last-child { border-bottom: none; }
+  .checklist ul li::before { content: ''; position: absolute; left: 4px; top: 8px; width: 9px; height: 9px; border-radius: 2px; }
+  .checklist.teal  { background: #f0fdfa; border: 1px solid #99f6e4; }
+  .checklist.teal  .checklist-title { color: #0f766e; }
+  .checklist.teal  ul li::before { border: 1.5px solid #14b8a6; }
+  .checklist.amber { background: #fffbeb; border: 1px solid #fde68a; }
+  .checklist.amber .checklist-title { color: #92400e; }
+  .checklist.amber ul li::before { border: 1.5px solid #f59e0b; }
+
+  /* Footer bar */
+  .page-footer {
+    background: #f8faff; border-top: 1px solid #e0e7ff;
+    padding: 10px 0.65in; display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
+  }
+  .pf-left { font-size: 11px; font-weight: 600; color: #0d2444; }
+  .pf-right { font-size: 10.5px; color: #9ca3af; }
+
+  @media print { body { margin: 0; } .page { margin: 0; page-break-after: always; } .no-print { display: none; } }
+  @page { margin: 0; size: letter; }
+
+  .print-btn {
+    position: fixed; top: 18px; right: 18px; background: #1d4ed8; color: #fff;
+    border: none; padding: 10px 22px; border-radius: 7px; font-size: 13px; font-weight: 600;
+    cursor: pointer; box-shadow: 0 3px 10px rgba(29,78,216,0.35); z-index: 999;
+  }
+  .print-btn:hover { background: #1e40af; }
+</style>
+</head>
+<body>
+<button class="print-btn no-print" onclick="window.print()">🖨 Save as PDF</button>
+
+<!-- ── COVER ── -->
+<div class="page">
+  <div class="cover">
+    <div class="cover-eyebrow">Manager Reference Guide</div>
+    <div class="cover-logo">Field<span>Sync</span></div>
+    <div class="cover-title">Umpire Scheduling</div>
+    <div class="cover-rule"></div>
+    <div class="cover-desc">
+      Everything you need to build, assign, publish, and pay umpires —
+      from importing games to running end-of-week payroll.
+    </div>
+    <div class="cover-tags">
+      <span class="cover-tag">Schedule Builder</span>
+      <span class="cover-tag">Auto-Schedule</span>
+      <span class="cover-tag">Conflict Detection</span>
+      <span class="cover-tag">Time-Off &amp; Availability</span>
+      <span class="cover-tag">Rainouts</span>
+      <span class="cover-tag">Pay Report</span>
+    </div>
+    <div class="cover-footer">
+      <span>Spring Creek &amp; Mission Viejo · Season 2026</span>
+      <span>Confidential — Manager Use Only</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── PAGE 2: How it works + Adding Games ── -->
+<div class="page">
+  <div class="page-header">
+    <div class="ph-logo">Field<span>Sync</span></div>
+    <div class="ph-right"><div class="ph-title">Manager Umpire Guide</div><div class="ph-section">Sections 1–2</div></div>
+  </div>
+  <div class="body">
+
+    <div class="section-label">Section 1</div>
+    <h1>How Umpire Scheduling Works</h1>
+    <div class="rule"></div>
+
+    <div class="two-col">
+      <div>
+        <h2>Auto-Schedule algorithm</h2>
+        <p>Click <strong>⚡ Auto-schedule</strong> to fill the entire week in one click. The engine selects umpires in this order:</p>
+        <div class="step"><div class="step-num">1</div><div class="step-text">Worker is available that day with the umpire role</div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-text">No approved time-off request covers that date</div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-text">Highest seniority (Years Exp) preferred</div></div>
+        <div class="step"><div class="step-num">4</div><div class="step-text">Fewest assignments this week (load balancing)</div></div>
+        <div class="step"><div class="step-num">5</div><div class="step-text">Not already assigned to another game at the same time</div></div>
+        <div class="pill pill-blue">Auto-Schedule never overwrites a slot you already filled manually.</div>
+      </div>
+      <div>
+        <h2>Single vs. dual umpire</h2>
+        <p>FieldSync reads the division name to determine how many UMP slots to show on each game card.</p>
+        <table>
+          <thead><tr><th>Division</th><th>Slots</th></tr></thead>
+          <tbody>
+            <tr><td>Majors, AAA, AA, Softball 10U+</td><td>UMP 1 + UMP 2</td></tr>
+            <tr><td>Minors, A, Coach Pitch, Tee Ball</td><td>UMP 1 only</td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:8px">A purple <strong>"2 umps"</strong> badge marks dual-umpire game cards. Both slots must be filled before publishing.</p>
+
+        <h2 style="margin-top:12px">Manual assignment</h2>
+        <p>Use the <strong>UMP 1</strong> and <strong>UMP 2</strong> dropdowns directly on any game card to assign or override. Set to <strong>None</strong> to clear. Changes save instantly.</p>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-label">Section 2</div>
+    <h1>Getting Games Into the Schedule</h1>
+    <div class="rule"></div>
+
+    <div class="two-col">
+      <div>
+        <h2>Single game</h2>
+        <div class="step"><div class="step-num">1</div><div class="step-text">Go to <strong>Schedule</strong> → click <strong>+ Add game</strong></div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-text">Fill in Location, Field, Division, Date, Time, Home, Away</div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-text">Click <strong>Save</strong> — game appears immediately</div></div>
+      </div>
+      <div>
+        <h2 class="teal">Bulk CSV import</h2>
+        <div class="step"><div class="step-num">1</div><div class="step-text">Click <strong>↑ Import CSV</strong> at the top of the Schedule page</div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-text">Paste or upload your CSV file and click <strong>Import</strong></div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-text">Skipped rows (missing/invalid dates) are reported in the result</div></div>
+        <p style="margin-top:8px;color:#6b7280;font-size:11.5px"><strong>Required column order:</strong> location · field · division · date (YYYY-MM-DD) · time · away · home</p>
+      </div>
+    </div>
+
+  </div>
+  <div class="page-footer"><div class="pf-left">FieldSync Manager Umpire Guide</div><div class="pf-right">Page 2</div></div>
+</div>
+
+<!-- ── PAGE 3: Conflicts, Availability, Status, Rainout ── -->
+<div class="page">
+  <div class="page-header">
+    <div class="ph-logo">Field<span>Sync</span></div>
+    <div class="ph-right"><div class="ph-title">Manager Umpire Guide</div><div class="ph-section">Sections 3–4</div></div>
+  </div>
+  <div class="body">
+
+    <div class="section-label">Section 3</div>
+    <h1>Conflicts &amp; Availability</h1>
+    <div class="rule"></div>
+
+    <div class="two-col">
+      <div>
+        <h2 class="rose">Conflict detection</h2>
+        <p>FieldSync scans assignments continuously. If an umpire is double-booked, a red warning and border appear directly on both affected game cards — no separate check is needed.</p>
+        <div class="conflict-badge">⚠ Jordan Smith is also assigned to AAA · MV Field 2 at 10:00 AM</div>
+        <p><strong>To resolve:</strong> open the UMP dropdown on one of the conflicting games and choose a different umpire, or set to None and re-run Auto-Schedule.</p>
+        <div class="pill pill-blue">Cancelled and postponed games are excluded from conflict checks.</div>
+      </div>
+      <div>
+        <h2 class="teal">Availability &amp; time-off requests</h2>
+        <p>Workers set their own availability in the app. Umpires only appear in the assignment dropdowns for dates they've marked available.</p>
+        <div class="step"><div class="step-num">1</div><div class="step-text">Open <strong>Requests</strong> in the nav — pending time-off appears here</div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-text">Click <strong>Approve</strong> or <strong>Deny</strong> — the worker gets an in-app notification</div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-text">Approved requests block Auto-Schedule on that date automatically</div></div>
+        <div class="pill pill-amber">Always approve time-off requests before running Auto-Schedule so the engine works around them.</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-label">Section 4</div>
+    <h1>Game Status &amp; Rainouts</h1>
+    <div class="rule"></div>
+
+    <div class="two-col">
+      <div>
+        <h2 class="amber">Game status</h2>
+        <p>Change a game's status via the dropdown on each game card. Status affects pay and conflict detection.</p>
+        <table>
+          <thead><tr><th>Status</th><th>Pay &amp; Conflicts</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Scheduled</strong></td><td>Counts toward pay; triggers conflict checks</td></tr>
+            <tr><td><strong>Cancelled</strong></td><td>Excluded from pay; no conflicts triggered</td></tr>
+            <tr><td><strong>Postponed</strong></td><td>Same as cancelled until re-dated</td></tr>
+            <tr><td><strong>Rainout</strong></td><td>Clears all ump &amp; crew assignments</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <h2 class="rose">⛈ Rainout tool</h2>
+        <p>Cancels every game at one location on one date and clears all umpire and crew assignments in one action — faster than editing games individually.</p>
+        <div class="step"><div class="step-num">1</div><div class="step-text">Navigate to the affected date in Schedule view</div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-text">Click the red <strong>⛈ Rainout</strong> button next to that location</div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-text">Confirm — all games marked Rainout and assignments cleared</div></div>
+        <div class="pill pill-rose">Rainout cannot be undone. Umpire assignments are not recoverable. Use only when the full day is cancelled.</div>
+      </div>
+    </div>
+
+  </div>
+  <div class="page-footer"><div class="pf-left">FieldSync Manager Umpire Guide</div><div class="pf-right">Page 3</div></div>
+</div>
+
+<!-- ── PAGE 4: Publishing + Pay + Checklists ── -->
+<div class="page">
+  <div class="page-header">
+    <div class="ph-logo">Field<span>Sync</span></div>
+    <div class="ph-right"><div class="ph-title">Manager Umpire Guide</div><div class="ph-section">Sections 5–6 · Quick Reference</div></div>
+  </div>
+  <div class="body">
+
+    <div class="section-label">Section 5</div>
+    <h1>Publishing &amp; Reminders</h1>
+    <div class="rule"></div>
+
+    <div class="two-col">
+      <div>
+        <p>Workers cannot see assignments until you publish. A green <strong>"Published"</strong> banner at the top of the week confirms it's live.</p>
+        <div class="step"><div class="step-num">1</div><div class="step-text">Fill all ump slots and resolve any red conflict warnings</div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-text">Click <strong>✓ Publish week</strong></div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-text">Umpires see their games in <strong>My Shifts</strong> immediately</div></div>
+        <div class="step"><div class="step-num">4</div><div class="step-text">ICS calendar subscriptions update within the hour</div></div>
+        <div class="step"><div class="step-num">5</div><div class="step-text">Click <strong>🔔 Send reminders</strong> to push in-app notifications</div></div>
+        <div class="pill pill-blue">Edits still save in real time after publishing. Use Send reminders to alert workers of any significant changes.</div>
+      </div>
+
+      <div>
+        <div class="section-label" style="margin-top:0">Section 6</div>
+        <h2 style="font-size:13px;color:#0d2444;margin-top:2px">Pay &amp; Payroll Report</h2>
+        <p>Go to <strong>Reports → Pay &amp; Payroll</strong>. Umpire pay is calculated automatically: games assigned × rate per game. Cancelled and postponed games are excluded.</p>
+
+        <h2 class="teal">Setting pay rates</h2>
+        <p>The <strong>Default pay rates</strong> panel sets the fallback for all umpires. For an individual override, type directly in the rate field next to that umpire's name in the pay table and tab away — saves instantly.</p>
+
+        <h2 class="amber" style="margin-top:10px">Exporting for accounting</h2>
+        <div class="step"><div class="step-num">1</div><div class="step-text">Click <strong>↗ Export for accountant</strong></div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-text">A formatted report opens in a new browser tab</div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-text">Chrome: <strong>File → Print → Save as PDF</strong></div></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <p style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#3b82f6;margin-bottom:10px">Quick Reference</p>
+    <div class="two-col">
+      <div class="checklist teal">
+        <div class="checklist-title">✅ Weekly scheduling checklist</div>
+        <ul>
+          <li>Import or add new games for the week</li>
+          <li>Approve or deny pending time-off requests</li>
+          <li>Navigate to the upcoming week in Schedule</li>
+          <li>Click ⚡ Auto-schedule — review assignments</li>
+          <li>Resolve any red conflict warnings</li>
+          <li>Click ✓ Publish week</li>
+          <li>Click 🔔 Send reminders</li>
+        </ul>
+      </div>
+      <div class="checklist amber">
+        <div class="checklist-title">⚠ Common problems &amp; fixes</div>
+        <ul>
+          <li><strong>UMP slot stays None after Auto-Schedule:</strong> no available umpire — check Staff → Workers availability</li>
+          <li><strong>Umpire can't see their games:</strong> confirm the green "Published" banner is visible</li>
+          <li><strong>Wrong pay total:</strong> verify game status is Scheduled and the correct rate is set</li>
+          <li><strong>CSV rows skipped:</strong> dates must be YYYY-MM-DD, columns in required order</li>
+          <li><strong>Dual-umpire game missing UMP 2:</strong> Today view flags it as "Missing ump"</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+  <div class="page-footer"><div class="pf-left">FieldSync Manager Umpire Guide · Season 2026 · Confidential</div><div class="pf-right">Page 4</div></div>
+</div>
+
+</body>
+</html>
