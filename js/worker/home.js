@@ -4,10 +4,18 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp,save
   const[pushState,setPushState]=useState(()=>('Notification' in window?Notification.permission:'unsupported'));
   const[pushSaved,setPushSaved]=useState(false);
 
+  const[pushDebug,setPushDebug]=useState('');
+
   // Auto-subscribe on load if permission already granted but subscription may not be saved
   useEffect(()=>{
-    if(Notification.permission==='granted'&&'serviceWorker' in navigator&&savePushSub){
-      savePushSub(user.id).then(()=>setPushSaved(true)).catch(()=>{});
+    const standalone=navigator.standalone||window.matchMedia('(display-mode: standalone)').matches;
+    const hasPush='PushManager' in window;
+    const perm='Notification' in window?Notification.permission:'N/A';
+    setPushDebug('Standalone:'+standalone+' | PushManager:'+hasPush+' | Permission:'+perm);
+    if(perm==='granted'&&'serviceWorker' in navigator&&savePushSub){
+      savePushSub(user.id)
+        .then(()=>{setPushSaved(true);setPushDebug(d=>d+' | Saved:✓');})
+        .catch(e=>setPushDebug(d=>d+' | Error:'+e.message));
     }
   },[user.id]);
 
@@ -35,6 +43,7 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp,save
   const myRoles=(user.roles&&user.roles.length)?user.roles:[user.role];
 
   return R("div",null,
+    pushDebug&&R("div",{style:{background:"#0D1117",border:"1px solid #30363D",borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:11,color:"#7DDBA8",fontFamily:"monospace",wordBreak:"break-all"}},pushDebug),
     pushState==='default'&&R("div",{style:{background:"#1E2530",border:"1px solid #3A4060",borderRadius:10,padding:"12px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:12}},
       R("span",{style:{fontSize:20}},"🔔"),
       R("div",{style:{flex:1}},
