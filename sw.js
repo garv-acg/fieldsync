@@ -1,6 +1,5 @@
 const CACHE = 'fieldsync-v1';
 
-// Local app shell files to cache on install
 const SHELL = [
   '/',
   '/index.html',
@@ -32,14 +31,12 @@ const SHELL = [
   '/manifest.json',
 ];
 
-// Cache shell on install
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
   );
 });
 
-// Remove old caches on activate
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -50,18 +47,9 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+  if (url.hostname.includes('supabase.co') || url.hostname.includes('supabase.in')) return;
+  if (url.hostname.includes('cdnjs.cloudflare.com') || url.hostname.includes('cdn.jsdelivr.net')) return;
 
-  // Never intercept Supabase API calls — always go to network
-  if (url.hostname.includes('supabase.co') || url.hostname.includes('supabase.in')) {
-    return;
-  }
-
-  // Never intercept CDN scripts (React, Supabase JS SDK)
-  if (url.hostname.includes('cdnjs.cloudflare.com') || url.hostname.includes('cdn.jsdelivr.net')) {
-    return;
-  }
-
-  // For local app files: serve from cache, fall back to network, update cache
   e.respondWith(
     caches.match(e.request).then(cached => {
       const network = fetch(e.request).then(res => {
@@ -71,8 +59,36 @@ self.addEventListener('fetch', e => {
         }
         return res;
       });
-      // Return cached immediately, but also refresh in background
       return cached || network;
+    })
+  );
+});
+
+// Handle incoming push notifications
+self.addEventListener('push', e => {
+  let data = { title: 'FieldSync', message: '', url: '/' };
+  try { data = { ...data, ...e.data.json() }; } catch {}
+
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.message,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { url: data.url },
+      vibrate: [100, 50, 100],
+    })
+  );
+});
+
+// Open the app (or focus existing tab) when notification is tapped
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = e.notification.data?.url || '/';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(wins => {
+      const match = wins.find(w => w.url.includes(self.location.origin));
+      if (match) { match.focus(); match.navigate(url); }
+      else clients.openWindow(url);
     })
   );
 });

@@ -1,6 +1,14 @@
-function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp}){
+function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp,savePushSub,showToast}){
   const today=new Date().toISOString().slice(0,10);
   const[sel,setSel]=useState(today);
+  const[pushState,setPushState]=useState(()=>('Notification' in window?Notification.permission:'unsupported'));
+  const enablePush=async()=>{
+    setPushState('requesting');
+    await savePushSub(user.id);
+    setPushState('Notification' in window?Notification.permission:'unsupported');
+    if(Notification.permission==='granted')showToast("Notifications enabled","s");
+    else showToast("Notifications blocked — check your browser settings","w");
+  };
   const d0=new Date(today+"T12:00:00"),wd=[];
   for(let i=0;i<7;i++){const d=new Date(d0);d.setDate(d0.getDate()-d0.getDay()+i);wd.push(d.toISOString().slice(0,10))}
   const gw=date=>{
@@ -17,6 +25,15 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp}){
   const myRoles=(user.roles&&user.roles.length)?user.roles:[user.role];
 
   return R("div",null,
+    pushState==='default'&&R("div",{style:{background:"#1E2530",border:"1px solid #3A4060",borderRadius:10,padding:"12px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:12}},
+      R("span",{style:{fontSize:20}},"🔔"),
+      R("div",{style:{flex:1}},
+        R("div",{style:{fontWeight:700,fontSize:13,color:"#E8ECF8"}},"Get notified when your schedule is ready"),
+        R("div",{style:{fontSize:12,color:"#6B7394",marginTop:2}},"Tap below to allow lock-screen notifications.")
+      ),
+      R("button",{className:"btn btn-blue btn-sm",onClick:enablePush},"Enable")
+    ),
+    pushState==='requesting'&&R("div",{style:{background:"#1E2530",border:"1px solid #3A4060",borderRadius:10,padding:"12px 16px",marginBottom:12,fontSize:13,color:"#9BA3BF"}},"Setting up notifications…"),
     R("div",{style:{background:"#1A2550",border:"1px solid #4F7EF7",borderRadius:12,padding:"16px 20px",marginBottom:18,display:"flex",alignItems:"center",gap:14}},
       R("div",{style:{width:44,height:44,borderRadius:"50%",background:"#252A3D",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:16,flexShrink:0}},ini(user.name)),
       R("div",null,R("div",{style:{fontWeight:800,fontSize:16}},"Hey "+user.name.split(" ")[0]+"!"),R("div",{style:{color:"#A8C0FC",fontSize:13,marginTop:3}},next?"Next shift: "+next:"No shifts this week.")),

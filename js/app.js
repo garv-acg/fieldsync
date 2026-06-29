@@ -113,6 +113,38 @@ function App(){
 
   const showToast=(msg,type)=>{setToast({msg,type:type||"info"});setTimeout(()=>setToast(null),3000)};
   const pushNotifs=arr=>{swrite(sb.from('notifications').insert(arr.map(n=>({id:n.id,worker_id:n.workerId,msg:n.msg,time:n.time,read:n.read,type:n.type}))))};
+
+  // ── Web Push helpers ───────────────────────────────────────────────
+  const VAPID_PUBLIC='BNIZohQ7q12o5w1j0MCLxqjvuKwjkyBiNgl0x_uXMcmhmfaCCWAW84DySKbo-hSYyCYtsbDipfog78mGC4Azvlk';
+
+  const subscribeToPush=async()=>{
+    if(!('serviceWorker' in navigator)||!('PushManager' in window))return null;
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted')return null;
+    const reg=await navigator.serviceWorker.ready;
+    const existing=await reg.pushManager.getSubscription();
+    if(existing)return existing;
+    return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:VAPID_PUBLIC});
+  };
+
+  const savePushSub=async(wId)=>{
+    const sub=await subscribeToPush();
+    if(!sub)return;
+    await sb.from('push_subscriptions').upsert({worker_id:wId,sub:sub.toJSON()},{onConflict:'worker_id'});
+  };
+
+  const sendPush=async(workerIds,title,message,url='/')=>{
+    if(!workerIds.length)return;
+    const{data}=await sb.from('push_subscriptions').select('sub').in('worker_id',workerIds);
+    const subs=(data||[]).map(r=>r.sub).filter(Boolean);
+    if(!subs.length)return;
+    fetch('/.netlify/functions/send-push',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-fieldsync-key':window.__FS_PUSH_SECRET__||''},
+      body:JSON.stringify({subscriptions:subs,title,message,url})
+    }).catch(e=>console.warn('Push send failed:',e));
+  };
+
   const conf=useMemo(()=>detConf(games,workers,da,locs),[games,workers,da,locs]);
 
   const runAuto=()=>{
@@ -141,6 +173,7 @@ function App(){
     Object.entries(da).filter(([k])=>wkKey(k.split("|")[0])===ws).forEach(([,v])=>{(v.fieldCrew||[]).forEach(u=>aff.add(u));(v.concessions||[]).forEach(u=>aff.add(u))});
     const n=[...aff].map(wId=>({id:Date.now()+wId,workerId:wId,msg:"Schedule published for week of "+ws+" — check your shifts.",time:new Date().toISOString(),read:false,type:"info"}));
     setNotifs(p=>[...n,...p]);pushNotifs(n);
+    sendPush([...aff],"📅 FieldSync schedule published","Your shifts for the week of "+ws+" are ready — tap to view.","/");
     // Silently refresh ICS calendars for all affected workers
     const isPubFn=d=>{const s=newPub(pub);return s.has(wkKey(d));};
     const gd=(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests);
@@ -368,6 +401,8 @@ function App(){
         {id:Date.now()+1,workerId:req.workerId, msg:"✅ "+claimer?.name+" is covering your shift on "+req.date+" at "+(loc?.name||"?")+".",time:new Date().toISOString(),read:false,type:"success"}
       ];
       setNotifs(p=>[...n,...p]);pushNotifs(n);
+      sendPush([req.claimedBy],"✅ Shift claim approved","You're covering "+req.date+" at "+(loc?.name||"your location")+".");
+      sendPush([req.workerId],"✅ Shift covered",claimer?.name+" is covering your shift on "+req.date+".");
     } else {
       if(req?.type==="shift_offer"&&action==="denied"&&req.claimedBy){
         const loc=locs.find(l=>l.id===req.locId);
@@ -454,7 +489,7 @@ function App(){
   const adminNav=[{id:"today",label:"Today"},{id:"schedule",label:"Schedule"},{id:"staff",label:"Staff",badge:conf.length},{id:"requests",label:"Requests",badge:pendingR},{id:"reports",label:"Reports"},{id:"settings",label:"Settings"}];
   const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"resources",label:"Resources"},{id:"notifications",label:"Notifications",badge:unread}];
   const nav=effectiveUser.role==="overseer"?adminNav:workerNav;
-  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,isLocked,lockWeek,unlockWeek,lockedWeeks,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,updAvailByRoleAll,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updConcessionsShift,updSnackShackOpen,updWorkerRoles,updWorkerPayRate,addWorker,updWorkerPassword};
+  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,isLocked,lockWeek,unlockWeek,lockedWeeks,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,updAvailByRoleAll,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updConcessionsShift,updSnackShackOpen,updWorkerRoles,updWorkerPayRate,addWorker,updWorkerPassword,savePushSub};
   const isWorker=effectiveUser.role!=="overseer";
   const workerBottomNav=[
     {id:"worker_home",label:"Home",icon:"🏠"},

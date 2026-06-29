@@ -54,3 +54,11 @@ INSERT INTO requests (id, type, worker_id, date, date_start, date_end, loc_id, r
 -- ── Done ─────────────────────────────────────────────────────────────
 -- After running: refresh the app and confirm workers appear in Staff > Workers.
 -- The auto-scheduler will respect all vacation blocks automatically.
+
+-- Push notification subscriptions
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  worker_id bigint PRIMARY KEY REFERENCES workers(id) ON DELETE CASCADE,
+  sub jsonb NOT NULL,
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE push_subscriptions DISABLE ROW LEVEL SECURITY;
