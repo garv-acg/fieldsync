@@ -96,13 +96,14 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp}){
           sw.concLocs.map(loc=>{
             const d=da[dk(sel,loc.id)]||{};
             const tm=(d.concessions||[]).filter(id=>id!==user.id).map(id=>workers.find(w=>w.id===id)?.name||"?");
-            const locGamesC=games.filter(g=>g.date===sel&&g.locId===loc.id&&g.status==="scheduled").sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
+            const myShift=(d.concessionsShifts||{})[user.id]||{};
+            const fmt12=t=>{if(!t)return"";const[h,m]=t.split(":").map(Number);const ap=h>=12?"PM":"AM";return(h%12||12)+(m?":"+String(m).padStart(2,"0"):"")+ap;};
+            const shiftLabel=myShift.start&&myShift.end?fmt12(myShift.start)+" – "+fmt12(myShift.end):myShift.start?fmt12(myShift.start)+" onwards":null;
+            const locGamesC=games.filter(g=>g.date===sel&&g.locId===loc.id&&g.status==="scheduled");
             if(locGamesC.length===0)return null;
-            const _c0=locGamesC[0]?.time,_cN=locGamesC[locGamesC.length-1]?.time;
-            const timeRangeC=_c0+(_cN&&_cN!==_c0?" – "+_cN:"");
             return R("div",{key:loc.id,style:{background:"#1E2333",border:"1px solid #2E3450",borderRadius:8,padding:"12px",marginBottom:8}},
               R("div",{style:{fontWeight:700,fontSize:14}},loc.name),
-              R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},"Snack shack · "+locGamesC.length+" game"+(locGamesC.length!==1?"s":"")+" · "+timeRangeC),
+              R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},"Snack shack"+(shiftLabel?" · "+shiftLabel:"")+" · "+locGamesC.length+" game"+(locGamesC.length!==1?"s":"")),
               tm.length>0&&R("div",{style:{fontSize:12,color:"#6B7394",marginTop:4}},"With you: "+tm.join(", ")),
               R(RsvpBtns,{wId:user.id,date:sel,locId:loc.id,getRsvp,setRsvpStatus})
             );

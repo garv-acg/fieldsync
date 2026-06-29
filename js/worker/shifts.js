@@ -171,13 +171,13 @@ function MyShifts({user,games,da,workers,locs,isPub,getRsvp,setRsvpStatus,reques
         const[date,locId]=k.split("|"),loc=locs.find(l=>l.id===locId);
         const tm=(v.concessions||[]).filter(id=>id!==user.id).map(id=>workers.find(w=>w.id===id)?.name||"?");
         const p=isPub(date),offered=isOffered(date,locId);
-        const concGames=games.filter(g=>g.date===date&&g.locId===locId&&g.status==="scheduled").sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
-        const _cc0=concGames[0]?.time,_ccN=concGames[concGames.length-1]?.time;
-        const concTimeRange=concGames.length>0?_cc0+(_ccN&&_ccN!==_cc0?" – "+_ccN:""):null;
+        const myShift=(v.concessionsShifts||{})[user.id]||{};
+        const fmt12=t=>{if(!t)return"";const[h,m]=t.split(":").map(Number);const ap=h>=12?"PM":"AM";return(h%12||12)+(m?":" +String(m).padStart(2,"0"):"")+ap;};
+        const shiftLabel=myShift.start&&myShift.end?fmt12(myShift.start)+" – "+fmt12(myShift.end):myShift.start?fmt12(myShift.start)+" onwards":null;
         return R("div",{key:k,style:{background:"#181C27",border:"1px solid #2E3450",borderRadius:10,padding:"14px",marginBottom:10}},
           !p&&R("div",{style:{fontSize:11,color:"#F0C060",marginBottom:8}},"🔒 Not published yet"),
           R("div",{style:{fontWeight:700,fontSize:14}},date),
-          R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},(loc?.name||"?")+" — Snack Shack"+(concTimeRange?" · "+concTimeRange:"")),
+          R("div",{style:{fontSize:12,color:"#9BA3BF",marginTop:3}},(loc?.name||"?")+" — Snack Shack"+(shiftLabel?" · "+shiftLabel:"")),
           tm.length>0&&R("div",{style:{fontSize:12,color:"#6B7394",marginTop:4}},"With: "+tm.join(", ")),
           p&&R("div",null,
             R(RsvpBtns,{wId:user.id,date,locId,getRsvp,setRsvpStatus}),

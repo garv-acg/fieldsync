@@ -12,26 +12,28 @@ function UmpSlots({game,workers,setUmp}){
     )
   );
 }
-function CrewPanel({date,locId,da,workers,updDA,updSnackShackOpen,updConcessionsShift,loc}){
+function CrewPanel({date,locId,da,workers,updDA,updSnackShackOpen,updConcessionsShift,loc,requests}){
   const k=dk(date,locId),d=da[k]||{fieldCrew:[],concessions:[],concessionsShifts:{}};
   const ssOpen=d.snackShackOpen??true;
   const fw=workers.filter(w=>hasRole(w,"field")),cw=workers.filter(w=>hasRole(w,"concessions"));
+  const isSat=date&&new Date(date+"T12:00:00").getDay()===6;
+  const CC=isSat?6:3;
   const tog=(role,wId)=>{
     const curr=[...((role==="fieldCrew"?d.fieldCrew:d.concessions)||[])];
     const next=curr.includes(wId)?curr.filter(x=>x!==wId):[...curr,wId];
     if(role==="fieldCrew"&&next.length>FC)return;
-    if(role==="concessions"&&next.length>3)return;
+    if(role==="concessions"&&next.length>CC)return;
     updDA(date,locId,role,next);
   };
   const selConc=(d.concessions||[]).map(id=>workers.find(w=>w.id===id)).filter(Boolean);
   return R("div",{style:{background:"#1E2333",border:"1px solid #2E3450",borderRadius:8,padding:"10px 12px",marginTop:8}},
     R("div",{style:{marginBottom:loc?.hasSnackShack?8:0}},
       R("div",{style:{fontSize:11,color:"#6B7394",fontWeight:700,marginBottom:5,textTransform:"uppercase"}},"Field crew ("+(d.fieldCrew||[]).length+"/"+FC+")"),
-      R("div",{style:{display:"flex",gap:5,flexWrap:"wrap"}},fw.map(w=>{const sel=(d.fieldCrew||[]).includes(w.id),av=wa(w,date,null,"field");return R("button",{key:w.id,className:"btn btn-sm"+(sel?" btn-blue":""),style:{opacity:av?1:.3,fontSize:11},disabled:!av&&!sel,onClick:()=>tog("fieldCrew",w.id)},w.name.split(" ")[0])}))
+      R("div",{style:{display:"flex",gap:5,flexWrap:"wrap"}},fw.map(w=>{const sel=(d.fieldCrew||[]).includes(w.id),av=wa(w,date,requests,"field");return R("button",{key:w.id,className:"btn btn-sm"+(sel?" btn-blue":""),style:{opacity:av?1:.3,fontSize:11},disabled:!av&&!sel,onClick:()=>tog("fieldCrew",w.id)},w.name.split(" ")[0])}))
     ),
     loc?.hasSnackShack&&R("div",null,
       R("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:5}},
-        R("div",{style:{fontSize:11,color:"#6B7394",fontWeight:700,textTransform:"uppercase"}},ssOpen?"Snack shack ("+(d.concessions||[]).length+"/3)":"Snack shack"),
+        R("div",{style:{fontSize:11,color:"#6B7394",fontWeight:700,textTransform:"uppercase"}},ssOpen?"Snack shack ("+(d.concessions||[]).length+"/"+CC+")":"Snack shack"),
         R("button",{
           className:"btn btn-sm",
           style:ssOpen?{fontSize:10,padding:"2px 8px",background:"#13311F",color:"#7DDBA8",border:"1px solid #3DBA7B"}:{fontSize:10,padding:"2px 8px",background:"#3D2E10",color:"#F0C060",border:"1px solid #E0A030"},
@@ -40,7 +42,7 @@ function CrewPanel({date,locId,da,workers,updDA,updSnackShackOpen,updConcessions
       ),
       ssOpen
         ? R("div",null,
-            R("div",{style:{display:"flex",gap:5,flexWrap:"wrap",marginBottom:selConc.length?8:0}},cw.map(w=>{const sel=(d.concessions||[]).includes(w.id),av=wa(w,date,null,"concessions");return R("button",{key:w.id,className:"btn btn-sm"+(sel?" btn-blue":""),style:{opacity:av?1:.3,fontSize:11},disabled:!av&&!sel,onClick:()=>tog("concessions",w.id)},w.name.split(" ")[0])})),
+            R("div",{style:{display:"flex",gap:5,flexWrap:"wrap",marginBottom:selConc.length?8:0}},cw.map(w=>{const sel=(d.concessions||[]).includes(w.id),av=wa(w,date,requests,"concessions");return R("button",{key:w.id,className:"btn btn-sm"+(sel?" btn-blue":""),style:{opacity:av?1:.3,fontSize:11},disabled:!av&&!sel,onClick:()=>tog("concessions",w.id)},w.name.split(" ")[0])})),
             selConc.length>0&&R("div",{style:{display:"flex",flexDirection:"column",gap:6}},
               selConc.map(w=>{
                 const shift=(d.concessionsShifts||{})[w.id]||{};

@@ -29,13 +29,17 @@ function computePayRows(workers,games,da,payConfig,filterDates,locs){
       const rate=effectiveRate(w,"umpire",payConfig);
       entries.push({role:"umpire",label:"Umpire",count:myGames.length,hours:null,rate,total:myGames.length*rate});
     }
+    const hasGamesAny=(date,locId)=>games.some(g=>g.date===date&&g.locId===locId);
+    const hasGames=(date,locId)=>games.some(g=>g.date===date&&g.locId===locId&&g.status==="scheduled");
     if(roles.includes("field")){
-      const shifts=Object.entries(da).filter(([k,v])=>(v.fieldCrew||[]).includes(w.id)&&inRange(k.split("|")[0]));
+      const shiftKeys=Object.entries(da).filter(([k,v])=>{const[date,locId]=k.split("|");return(v.fieldCrew||[]).includes(w.id)&&inRange(date)&&hasGamesAny(date,locId)});
+      const uniqueDates=new Set(shiftKeys.map(([k])=>k.split("|")[0]));
+      const count=uniqueDates.size;
       const rate=effectiveRate(w,"field",payConfig);
-      entries.push({role:"field",label:"Field crew",count:shifts.length,hours:null,rate,total:shifts.length*rate});
+      entries.push({role:"field",label:"Field crew",count,hours:null,rate,total:count*rate});
     }
     if(roles.includes("concessions")){
-      const shifts=Object.entries(da).filter(([k,v])=>{const[d,locId]=k.split("|");const loc=(locs||[]).find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(w.id)&&inRange(d)});
+      const shifts=Object.entries(da).filter(([k,v])=>{const[d,locId]=k.split("|");const loc=(locs||[]).find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(w.id)&&inRange(d)&&hasGames(d,locId)});
       const rate=effectiveRate(w,"concessions",payConfig);
       const hours=shifts.reduce((sum,[k])=>sum+shiftHours(da,k,w.id),0);
       entries.push({role:"concessions",label:"Concessions",count:shifts.length,hours,rate,total:hours*rate});
@@ -46,11 +50,12 @@ function computePayRows(workers,games,da,payConfig,filterDates,locs){
 }
 
 // ── Season report (original) ───────────────────────────────────────
-function SeasonTab({workers,games,da,rsvp}){
+function SeasonTab({workers,games,da,rsvp,locs}){
   const rows=workers.filter(w=>w.role!=="overseer").map(w=>{
     let shifts=0;
     if(w.role==="umpire")shifts=games.filter(g=>g.status!=="cancelled"&&(g.ump1===w.id||g.ump2===w.id)).length;
-    else{const rk=w.role==="field"?"fieldCrew":"concessions";shifts=Object.values(da).filter(v=>(v[rk]||[]).includes(w.id)).length}
+    else if(w.role==="field"){shifts=new Set(Object.entries(da).filter(([k,v])=>{const[date,locId]=k.split("|");return(v.fieldCrew||[]).includes(w.id)&&games.some(g=>g.date===date&&g.locId===locId&&g.status==="scheduled")}).map(([k])=>k.split("|")[0])).size}
+    else{shifts=Object.entries(da).filter(([k,v])=>{const[date,locId]=k.split("|");const loc=locs?.find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(w.id)&&games.some(g=>g.date===date&&g.locId===locId&&g.status==="scheduled")}).length}
     let confirmed=0,declined=0;
     Object.entries(rsvp).forEach(([k,status])=>{if(Number(k.split("_")[0])===w.id){if(status==="confirmed")confirmed++;if(status==="declined")declined++}});
     const totalRsvp=confirmed+declined,declineRate=totalRsvp>0?Math.round(declined/totalRsvp*100):null;
@@ -87,19 +92,25 @@ function SeasonTab({workers,games,da,rsvp}){
 }
 
 // ── Pay tab ────────────────────────────────────────────────────────
-function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,updWorkerPayRate,locs}){
+function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,updWorkerPayRate,locs,lockWeek,unlockWeek,isLocked,lockedWeeks}){
   const[scope,setScope]=useState("week"); // "week" | "season"
   const[weekStart,setWeekStart]=useState(()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());return d.toISOString().slice(0,10)});
   const[showRates,setShowRates]=useState(false);
   const[rateInputs,setRateInputs]=useState({umpireRate:payConfig.umpireRate,fieldRate:payConfig.fieldRate,concessionsRate:payConfig.concessionsRate});
+  const[adjInputs,setAdjInputs]=useState({}); // {wId: {role: string, amt: string, note: string}}
+  const[hideUmpires,setHideUmpires]=useState(false);
 
-  const shiftWeek=n=>{const d=new Date(weekStart+"T12:00:00");d.setDate(d.getDate()+n*7);setWeekStart(d.toISOString().slice(0,10))};
+  const shiftWeek=n=>{const d=new Date(weekStart+"T12:00:00");d.setDate(d.getDate()+n*7);setWeekStart(d.toISOString().slice(0,10));setAdjInputs({})};
   const weekEnd=()=>{const d=new Date(weekStart+"T12:00:00");d.setDate(d.getDate()+6);return d.toISOString().slice(0,10)};
   const weekDates=()=>{const s=new Date(weekStart+"T12:00:00"),out=new Set();for(let i=0;i<7;i++){const d=new Date(s);d.setDate(s.getDate()+i);out.add(d.toISOString().slice(0,10))}return out};
 
   const filterDates=scope==="week"?weekDates():null;
-  const rows=computePayRows(workers,games,da,payConfig,filterDates,locs);
-  const grandTotal=rows.reduce((s,r)=>s+r.grandTotal,0);
+  const allRows=computePayRows(workers,games,da,payConfig,filterDates,locs);
+  const rows=hideUmpires
+    ?allRows.map(r=>{const entries=r.entries.filter(e=>e.role!=="umpire");const grandTotal=entries.reduce((s,e)=>s+e.total,0);return{...r,entries,grandTotal}}).filter(r=>r.entries.length>0)
+    :allRows;
+  const getAdj=wId=>{const a=adjInputs[wId];return a?parseFloat(a.amt)||0:0};
+  const grandTotal=rows.reduce((s,r)=>s+r.grandTotal+getAdj(r.worker.id),0);
 
   const fmtCur=n=>"$"+n.toFixed(2);
   const fmtDate=d=>new Date(d+"T12:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
@@ -114,22 +125,29 @@ function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,upd
       ?"Week of "+fmtDate(weekStart)+" – "+fmtDate(weekEnd())
       :"Full Season";
     const groups=[
-      {label:"Umpires",role:"umpire",cols:["Name","Games","Rate / Game","Total"]},
-      {label:"Field Crew",role:"field",cols:["Name","Shifts","Rate / Shift","Total"]},
-      {label:"Concessions",role:"concessions",cols:["Name","Shifts","Hours","Rate / Hr","Total"]},
+      ...(!hideUmpires?[{label:"Umpires",role:"umpire",cols:["Name","Games","Rate / Game","Total"]}]:[]),
+      {label:"Field Crew",role:"field",cols:["Name","Days Worked","Shifts","Rate / Shift","Total"]},
+      {label:"Concessions",role:"concessions",cols:["Name","Shifts","Shift Times","Hours","Rate / Hr","Total"]},
     ];
     const groupedWorkers=role=>rows.filter(r=>r.entries.some(e=>e.role===role));
+    const DNAMES=["Su","M","Tu","W","Th","F","Sa"];
     const tableFor=g=>{
-      const wrows=groupedWorkers(g.role);
+      // Filter out workers with nothing earned in this role
+      const wrows=groupedWorkers(g.role).filter(r=>{const e=r.entries.find(x=>x.role===g.role);return e&&(e.count>0||e.hours>0);});
       if(!wrows.length)return'<p style="color:#888;font-style:italic">No staff scheduled.</p>';
       let subtotal=0;
       const bodyRows=wrows.map(r=>{
         const e=r.entries.find(x=>x.role===g.role);
         if(!e)return"";
-        subtotal+=e.total;
+        const workerRoleTotal=e.total;
+        subtotal+=workerRoleTotal;
+        const concTimes=g.role==="concessions"?Object.entries(da).filter(([k,v])=>{const[d,locId]=k.split("|");const loc=(locs||[]).find(l=>l.id===locId);return loc?.hasSnackShack&&(v.concessions||[]).includes(r.worker.id)&&(!filterDates||filterDates.has(d));}).map(([k])=>concShiftTime(r.worker.id,k)).filter(Boolean).join("<br>") || "—":"";
+        const fieldDays=g.role==="field"?[...new Set(Object.entries(da).filter(([k,v])=>{const[d,locId]=k.split("|");return(v.fieldCrew||[]).includes(r.worker.id)&&(!filterDates||filterDates.has(d))&&games.some(gg=>gg.date===d&&gg.locId===locId);}).map(([k])=>k.split("|")[0]))].sort().map(d=>DNAMES[new Date(d+"T12:00:00").getDay()]).join(", "):"";
         const cells=g.role==="concessions"
-          ?`<td>${r.worker.name}</td><td>${e.count}</td><td>${e.hours.toFixed(2)}</td><td>${fmtCur(e.rate)}</td><td><strong>${fmtCur(e.total)}</strong></td>`
-          :`<td>${r.worker.name}</td><td>${e.count}</td><td>${fmtCur(e.rate)}</td><td><strong>${fmtCur(e.total)}</strong></td>`;
+          ?`<td>${r.worker.name}</td><td>${e.count}</td><td style="font-size:11px;color:#444;line-height:1.6">${concTimes}</td><td>${e.hours.toFixed(2)}</td><td>${fmtCur(e.rate)}</td><td><strong>${fmtCur(workerRoleTotal)}</strong></td>`
+          :g.role==="field"
+          ?`<td>${r.worker.name}</td><td style="font-size:11px;color:#444">${fieldDays}</td><td>${e.count}</td><td>${fmtCur(e.rate)}</td><td><strong>${fmtCur(workerRoleTotal)}</strong></td>`
+          :`<td>${r.worker.name}</td><td>${e.count}</td><td>${fmtCur(e.rate)}</td><td><strong>${fmtCur(workerRoleTotal)}</strong></td>`;
         return`<tr>${cells}</tr>`;
       }).join("");
       const colspan=g.cols.length;
@@ -137,39 +155,77 @@ function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,upd
       return`<table><thead><tr>${g.cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>${bodyRows}${footer}</tbody></table>`;
     };
 
-    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>FieldSync Pay Report</title><style>
+    // Department subtotals for summary box
+    const deptTotals=groups.map(g=>{
+      const wrows=groupedWorkers(g.role);
+      const sub=wrows.reduce((s,r)=>{const e=r.entries.find(x=>x.role===g.role);return s+(e?e.total:0)},0);
+      return{label:g.label,role:g.role,sub};
+    });
+    const totalAdj=rows.reduce((s,r)=>s+getAdj(r.worker.id),0);
+
+    // Adjustments section
+    const adjRows=rows.filter(r=>getAdj(r.worker.id)!==0).map(r=>{
+      const a=adjInputs[r.worker.id]||{};
+      const amt=parseFloat(a.amt)||0;
+      return`<tr><td>${r.worker.name}</td><td>${a.role?rl(a.role):"—"}</td><td style="color:${amt<0?"#c0392b":"#27ae60"};font-weight:600">${amt>0?"+":""}${fmtCur(amt)}</td><td>${a.note||"—"}</td></tr>`;
+    }).join("");
+
+    // Concessions shift times lookup
+    const concShiftTime=(wId,k)=>{const s=(da[k]?.concessionsShifts||{})[wId];if(!s?.start)return"";const fmt=t=>{const[h,m]=t.split(":").map(Number);const ap=h>=12?"PM":"AM";return(h%12||12)+(m?":"+String(m).padStart(2,"0"):"")+ap;};return s.end?fmt(s.start)+" – "+fmt(s.end):fmt(s.start)+" onwards";};
+
+    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>FieldSync Pay Report — ${title}</title><style>
       *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a2e;background:#fff;padding:40px 48px;font-size:13px}
-      .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:2px solid #1a1a2e}
-      .logo{font-size:22px;font-weight:800;letter-spacing:-0.5px}.logo span{color:#4A70FF}
-      .meta{text-align:right}.meta h2{font-size:16px;font-weight:700;margin-bottom:4px}.meta p{color:#666;font-size:12px}
-      .section{margin-bottom:32px}
-      .section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#666;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #e5e7eb}
-      table{width:100%;border-collapse:collapse;margin-bottom:0}
-      th{background:#f3f4f6;padding:7px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#374151;border-bottom:1px solid #d1d5db}
-      td{padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#1a1a2e}
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;background:#fff;padding:36px 48px;font-size:13px;line-height:1.5}
+      .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:18px;border-bottom:2px solid #111827}
+      .logo{font-size:24px;font-weight:900;letter-spacing:-0.5px}.logo span{color:#4A70FF}
+      .meta{text-align:right}.meta h2{font-size:15px;font-weight:700;margin-bottom:3px;color:#111827}.meta p{color:#6b7280;font-size:11.5px}
+      .summary{display:flex;gap:10px;margin-bottom:28px}
+      .summary-card{flex:1;border:1.5px solid #e5e7eb;border-radius:10px;padding:13px 16px}
+      .summary-card .s-label{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:#374151;margin-bottom:5px}
+      .summary-card .s-amt{font-size:19px;font-weight:800;color:#111827}
+      .summary-card .s-sub{font-size:10.5px;color:#6b7280;margin-top:2px}
+      .summary-card.adj .s-amt{color:${totalAdj<0?"#dc2626":totalAdj>0?"#16a34a":"#111827"}}
+      .summary-card.total{background:#111827;border-color:#111827}
+      .summary-card.total .s-label{color:rgba(255,255,255,0.5)}
+      .summary-card.total .s-amt{color:#fff}
+      .summary-card.total .s-sub{color:rgba(255,255,255,0.4)}
+      .section{margin-bottom:24px;page-break-inside:avoid}
+      .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.9px;color:#6b7280;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #e5e7eb}
+      table{width:100%;border-collapse:collapse}
+      th{background:#f9fafb;padding:6px 10px;text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#374151;border-bottom:1.5px solid #e5e7eb}
+      td{padding:7px 10px;border-bottom:1px solid #f3f4f6;color:#111827;vertical-align:top}
       tr:last-child td{border-bottom:none}
-      tr.subtotal td{background:#f9fafb;font-weight:600;border-top:1px solid #d1d5db}
-      .grand{display:flex;justify-content:flex-end;margin-top:24px;padding-top:20px;border-top:2px solid #1a1a2e}
-      .grand-box{background:#1a1a2e;color:#fff;padding:14px 24px;border-radius:8px;text-align:right}
-      .grand-box .label{font-size:11px;text-transform:uppercase;letter-spacing:0.5px;opacity:.7;margin-bottom:4px}
+      tr.subtotal td{background:#f9fafb;font-weight:700;border-top:1.5px solid #e5e7eb;color:#111827}
+      .bottom{display:flex;justify-content:space-between;align-items:flex-end;margin-top:20px;padding-top:16px;border-top:2px solid #111827;page-break-inside:avoid}
+      .grand-box{background:#111827;color:#fff;padding:12px 22px;border-radius:8px;text-align:right}
+      .grand-box .label{font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:rgba(255,255,255,0.6);margin-bottom:3px}
       .grand-box .amount{font-size:22px;font-weight:800}
-      .footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;display:flex;justify-content:space-between}
-      .print-btn{position:fixed;top:20px;right:20px;background:#4A70FF;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
-      @media print{.print-btn{display:none}body{padding:20px 28px}}
+      .footer-txt{font-size:10.5px;color:#9ca3af}
+      .print-btn{position:fixed;top:16px;right:16px;background:#4A70FF;color:#fff;border:none;padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(74,112,255,0.3)}
+      @media print{.print-btn{display:none}body{padding:24px 32px}th{-webkit-print-color-adjust:exact;print-color-adjust:exact}.summary-card.total{-webkit-print-color-adjust:exact;print-color-adjust:exact}.grand-box{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
     </style></head><body>
-    <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+    <button class="print-btn" onclick="window.print()">🖨 Print / Save PDF</button>
+    <script>window.onload=function(){window.print();};</script>
     <div class="header">
       <div class="logo">Field<span>Sync</span></div>
-      <div class="meta"><h2>Pay Report — ${title}</h2><p>Generated ${new Date().toLocaleDateString(undefined,{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p><p style="margin-top:2px;color:#888">Confidential — for accounting use</p></div>
+      <div class="meta"><h2>Pay Report — ${title}</h2><p>Generated ${new Date().toLocaleDateString(undefined,{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p><p style="margin-top:1px">Confidential — for accounting use</p></div>
+    </div>
+    <div class="summary">
+      ${deptTotals.map(d=>`<div class="summary-card"><div class="s-label">${d.label}</div><div class="s-amt">${fmtCur(d.sub)}</div><div class="s-sub">${groupedWorkers(d.role).filter(r=>{const e=r.entries.find(x=>x.role===d.role);return e&&(e.count>0||e.hours>0);}).length} worker${groupedWorkers(d.role).filter(r=>{const e=r.entries.find(x=>x.role===d.role);return e&&(e.count>0||e.hours>0);}).length!==1?"s":""}</div></div>`).join("")}
+      ${totalAdj!==0?`<div class="summary-card adj"><div class="s-label">Adjustments</div><div class="s-amt">${totalAdj>0?"+":""}${fmtCur(totalAdj)}</div><div class="s-sub">${rows.filter(r=>getAdj(r.worker.id)!==0).length} worker${rows.filter(r=>getAdj(r.worker.id)!==0).length!==1?"s":""}</div></div>`:""}
+      <div style="flex:1;border:2px solid #111827;border-radius:10px;padding:13px 16px;background:#111827;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:rgba(255,255,255,0.65);margin-bottom:5px">Total Payroll</div><div style="font-size:19px;font-weight:800;color:#fff">${fmtCur(grandTotal)}</div><div style="font-size:10.5px;color:rgba(255,255,255,0.45);margin-top:2px">${rows.length} worker${rows.length!==1?"s":""}</div></div>
     </div>
     ${groups.map(g=>`<div class="section"><div class="section-title">${g.label}</div>${tableFor(g)}</div>`).join("")}
-    <div class="grand"><div class="grand-box"><div class="label">Total Payroll</div><div class="amount">${fmtCur(grandTotal)}</div></div></div>
-    <div class="footer"><span>FieldSync Workforce &amp; Game Scheduling</span><span>Total workers: ${rows.length}</span></div>
+    ${adjRows?`<div class="section"><div class="section-title">Pay Adjustments</div><table><thead><tr><th>Name</th><th>Paycheck</th><th>Amount</th><th>Reason</th></tr></thead><tbody>${adjRows}</tbody></table></div>`:""}
+    <div class="bottom">
+      <div class="footer-txt"><div style="font-weight:600;color:#374151">FieldSync Workforce &amp; Game Scheduling</div><div style="margin-top:2px">${rows.length} workers · ${title}</div></div>
+      <div class="grand-box"><div class="label">Total Payroll</div><div class="amount">${fmtCur(grandTotal)}</div></div>
+    </div>
     </body></html>`;
 
-    const w=window.open("","_blank");
-    w.document.write(html);w.document.close();
+    const blob=new Blob([html],{type:"text/html"});
+    const url=URL.createObjectURL(blob);
+    window.open(url,"_blank");
   };
 
   return R("div",null,
@@ -211,7 +267,13 @@ function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,upd
         R("span",{style:{fontSize:13,fontWeight:600,color:"#E8ECF8"}},fmtDate(weekStart)+" – "+fmtDate(weekEnd())),
         R("button",{className:"btn btn-sm",onClick:()=>shiftWeek(1)},"Next →")
       ),
-      R("button",{className:"btn btn-blue",onClick:exportPay},"↗ Export for accountant")
+      R("div",{style:{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}},
+        R("button",{className:"btn btn-sm"+(hideUmpires?" btn-amber":""),onClick:()=>setHideUmpires(p=>!p),title:"Toggle umpire section"},hideUmpires?"Umpires: OFF":"Umpires: ON"),
+        scope==="week"&&(isLocked&&isLocked(weekStart)
+          ?R("button",{className:"btn btn-sm",style:{background:"#3D2E10",color:"#F0C060",borderColor:"#E0A030"},onClick:()=>unlockWeek&&unlockWeek(weekStart)},"🔓 Unlock week")
+          :R("button",{className:"btn btn-sm",style:{background:"#3D2E10",color:"#F0C060",borderColor:"#E0A030"},onClick:()=>lockWeek&&lockWeek(weekStart)},"🔒 Lock week")),
+        R("button",{className:"btn btn-blue",onClick:exportPay},"↗ Export for accountant")
+      )
     ),
 
     // ── Concessions hours logger (weekly only) ──
@@ -248,29 +310,51 @@ function PayTab({workers,games,da,payConfig,updPayConfig,updConcessionsHours,upd
               R("th",{style:{padding:"6px 10px",color:"#6B7394",fontSize:11,textTransform:"uppercase",textAlign:"right"}},"Total")
             )),
             R("tbody",null,[
-              ...rows.sort((a,b)=>b.grandTotal-a.grandTotal).map(r=>
-                R("tr",{key:r.worker.id,style:{borderTop:"1px solid #2E3450"}},
+              ...rows.sort((a,b)=>b.grandTotal-a.grandTotal).map(r=>{
+                const adj=adjInputs[r.worker.id]||{role:"",amt:"",note:""};
+                const adjAmt=parseFloat(adj.amt)||0;
+                const workerTotal=r.grandTotal+adjAmt;
+                return R("tr",{key:r.worker.id,style:{borderTop:"1px solid #2E3450"}},
                   R("td",{style:{padding:"10px 10px",fontWeight:700,verticalAlign:"top"}},r.worker.name),
                   R("td",{style:{padding:"10px 10px",verticalAlign:"top"}},R("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
                     workerRoles(r.worker).map(role=>R("span",{key:role,className:"badge "+rb(role)},rl(role)))
                   )),
                   R("td",{style:{padding:"10px 10px",verticalAlign:"top"}},
-                    R("div",null,r.entries.map(e=>
-                      R("div",{key:e.role,style:{fontSize:12,color:"#9BA3BF",marginBottom:4,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
-                        R("span",null,e.label+": "),
-                        e.role==="concessions"
-                          ? R("span",null,e.hours>0?e.hours.toFixed(2)+"h × ":"0h logged")
-                          : R("span",null,e.count+(e.role==="umpire"?" game":" shift")+(e.count!==1?"s":"")+" × "),
-                        R(WorkerRateInput,{key:r.worker.id+"-"+e.role,w:r.worker,role:e.role,payConfig,updWorkerPayRate}),
-                        e.role==="concessions"
-                          ? (e.hours>0?R("span",null," = $"+e.total.toFixed(2)):null)
-                          : R("span",null," = $"+e.total.toFixed(2))
+                    R("div",null,
+                      r.entries.map(e=>
+                        R("div",{key:e.role,style:{fontSize:12,color:"#9BA3BF",marginBottom:4,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
+                          R("span",null,e.label+": "),
+                          e.role==="concessions"
+                            ? R("span",null,e.hours>0?e.hours.toFixed(2)+"h × ":"0h logged")
+                            : R("span",null,e.count+(e.role==="umpire"?" game":" shift")+(e.count!==1?"s":"")+" × "),
+                          R(WorkerRateInput,{key:r.worker.id+"-"+e.role,w:r.worker,role:e.role,payConfig,updWorkerPayRate}),
+                          e.role==="concessions"
+                            ? (e.hours>0?R("span",null," = $"+e.total.toFixed(2)):null)
+                            : R("span",null," = $"+e.total.toFixed(2))
+                        )
+                      ),
+                      scope==="week"&&R("div",{style:{marginTop:8,display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}},
+                        R("span",{style:{fontSize:11,color:"#6B7394"}},"Adjustment:"),
+                        R("select",{value:adj.role||"",
+                          onChange:e=>setAdjInputs(p=>({...p,[r.worker.id]:{...adj,role:e.target.value}})),
+                          style:{padding:"2px 5px",borderRadius:4,border:"1px solid #2E3450",background:"#1A2035",color:"#E8ECF8",fontSize:12}},
+                          R("option",{value:""},"Role…"),
+                          workerRoles(r.worker).map(ro=>R("option",{key:ro,value:ro},rl(ro)))
+                        ),
+                        R("span",{style:{color:"#9BA3BF"}},"$"),
+                        R("input",{type:"number",step:0.5,value:adj.amt,placeholder:"0.00",
+                          onChange:e=>setAdjInputs(p=>({...p,[r.worker.id]:{...adj,amt:e.target.value}})),
+                          style:{width:70,padding:"2px 6px",borderRadius:4,border:"1px solid #2E3450",background:"#1A2035",color:"#E8ECF8",fontSize:12}}),
+                        R("input",{type:"text",value:adj.note,placeholder:"reason (e.g. no-show, short shift)",
+                          onChange:e=>setAdjInputs(p=>({...p,[r.worker.id]:{...adj,note:e.target.value}})),
+                          style:{width:180,padding:"2px 6px",borderRadius:4,border:"1px solid #2E3450",background:"#1A2035",color:"#E8ECF8",fontSize:12}}),
+                        adjAmt!==0&&R("span",{style:{fontSize:12,color:adjAmt<0?"#F09090":"#7DDBA8"}},(adjAmt>0?"+":"")+fmtCur(adjAmt))
                       )
-                    ))
+                    )
                   ),
-                  R("td",{style:{padding:"10px 10px",fontWeight:700,fontSize:15,textAlign:"right",verticalAlign:"top",color:"#7DDBA8"}},fmtCur(r.grandTotal))
-                )
-              ),
+                  R("td",{style:{padding:"10px 10px",fontWeight:700,fontSize:15,textAlign:"right",verticalAlign:"top",color:"#7DDBA8"}},fmtCur(workerTotal))
+                );
+              }),
               R("tr",{key:"total",style:{borderTop:"2px solid #5B7FFF"}},
                 R("td",{colSpan:3,style:{padding:"10px 10px",fontWeight:700,fontSize:13,color:"#9BA3BF"}},"Total payroll"),
                 R("td",{style:{padding:"10px 10px",fontWeight:800,fontSize:16,textAlign:"right",color:"#E8ECF8"}},"$"+grandTotal.toFixed(2))
@@ -316,7 +400,7 @@ function ConcessionsHoursInput({w,date,locId,da,updConcessionsHours}){
   const shiftLabel=shift?.start&&shift?.end?shift.start+" – "+shift.end:null;
   return R("div",{style:{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-start"}},
     R("div",{style:{fontSize:12,color:"#E8ECF8",fontWeight:600}},w.name),
-    shiftLabel&&R("div",{style:{fontSize:10,color:"#6B7394"}},shiftLabel+(autoHours!=null?" ("+autoHours.toFixed(2)+"h auto":""+(autoHours!=null?")":"))),
+    shiftLabel&&R("div",{style:{fontSize:10,color:"#6B7394"}},shiftLabel+(autoHours!=null?" ("+autoHours.toFixed(2)+"h auto)":"")),
     R("div",{style:{display:"flex",gap:6,alignItems:"center"}},
       R("input",{type:"number",min:0,step:0.25,value:val,onChange:e=>setVal(e.target.value),onBlur:save,
         placeholder:autoHours!=null?autoHours.toFixed(2):"hrs",

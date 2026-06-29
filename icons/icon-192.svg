@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="37" fill="#1A1F2E"/>
+  <polygon points="96,48 130.56,82.56 96,117.12 61.44,82.56" fill="none" stroke="#4A70FF" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="96" cy="48" r="4" fill="#4A70FF"/>
+  <circle cx="130.56" cy="82.56" r="4" fill="#4A70FF"/>
+  <circle cx="96" cy="117.12" r="4" fill="#4A70FF"/>
+  <circle cx="61.44" cy="82.56" r="4" fill="#4A70FF"/>
+  <text x="96" y="172.8" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" fill="#E8ECF8">FieldSync</text>
+</svg>

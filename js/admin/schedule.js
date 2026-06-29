@@ -131,7 +131,34 @@ function SaturdayView({games,workers,da,locs,pub}){
   );
 }
 
-function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAuto,setModal,setUmp,updDA,updSnackShackOpen,updConcessionsShift,setGS,rainout,getDragger,setDraggerOverride,draggerOverrides,sendReminders}){
+function buildWkSummary(ws,lf,games,da,workers){
+  const hasGamesAny=(date,locId)=>games.some(g=>g.date===date&&g.locId===locId);
+  const hasGames=(date,locId)=>games.some(g=>g.date===date&&g.locId===locId&&g.status==="scheduled");
+  return workers.filter(w=>w.role!=="overseer").map(w=>{
+    const roles=(w.roles&&w.roles.length)?w.roles:[w.role];
+    let count=0;
+    if(roles.includes("umpire"))count+=games.filter(g=>wkKey(g.date)===ws&&g.status!=="cancelled"&&(g.ump1===w.id||g.ump2===w.id)&&(lf==="all"||g.locId===lf)).length;
+    if(roles.includes("field"))count+=new Set(Object.entries(da).filter(([k,v])=>{const[d,l]=k.split("|");return wkKey(d)===ws&&(v.fieldCrew||[]).includes(w.id)&&(lf==="all"||l===lf)&&hasGamesAny(d,l)}).map(([k])=>k.split("|")[0])).size;
+    if(roles.includes("concessions"))count+=Object.entries(da).filter(([k,v])=>{const[d,l]=k.split("|");return wkKey(d)===ws&&(v.concessions||[]).includes(w.id)&&(lf==="all"||l===lf)&&hasGames(d,l)}).length;
+    return{id:w.id,name:w.name,roles,count};
+  }).filter(e=>e.count>0).sort((a,b)=>b.count-a.count);
+}
+
+function WeekShiftSummary({entries}){
+  if(!entries.length)return null;
+  return R("div",{style:{marginTop:12,padding:"10px 12px",background:"#141828",borderRadius:8,border:"1px solid #2E3450"}},
+    R("div",{style:{fontSize:11,fontWeight:700,color:"#6B7394",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}},"Shift summary this week"),
+    R("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
+      entries.map(e=>R("div",{key:e.id,style:{display:"flex",alignItems:"center",gap:5,background:"#1E2333",border:"1px solid #2E3450",borderRadius:6,padding:"4px 8px"}},
+        R("span",{style:{fontSize:12,color:"#E8ECF8",fontWeight:600}},e.name.split(" ")[0]),
+        R("span",{style:{fontSize:11,color:"#9BA3BF"}},(e.roles||[]).map(r=>({umpire:"U",field:"F",concessions:"C"})[r]||"").join("/")),
+        R("span",{style:{fontSize:12,fontWeight:700,color:"#5B7FFF",marginLeft:2}},e.count)
+      ))
+    )
+  );
+}
+
+function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,isLocked,lockWeek,unlockWeek,lockedWeeks,conf,runAuto,setModal,setUmp,updDA,updSnackShackOpen,updConcessionsShift,setGS,rainout,getDragger,setDraggerOverride,draggerOverrides,sendReminders,requests}){
   const[lf,setLf]=useState("all");
   const[showPast,setShowPast]=useState(false);
   const todayWk=wkKey(new Date().toISOString().slice(0,10));
@@ -161,43 +188,77 @@ function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAu
         showPast?"▲ Hide past weeks":"▼ Show past ("+pastWks.length+" week"+(pastWks.length>1?"s":"")+")")
     ),
     showPast&&pastWks.map(([ws,wdates])=>{
-      const p=pub.has(ws),wg=games.filter(g=>wkKey(g.date)===ws&&(lf==="all"||g.locId===lf));
+      const p=pub.has(ws),locked=isLocked(ws),wg=games.filter(g=>wkKey(g.date)===ws&&(lf==="all"||g.locId===lf));
       if(!wg.length)return null;
-      return R("div",{key:ws,style:{marginBottom:24,opacity:0.6}},
-        R("div",{className:"wpb "+(p?"wpb-p":"wpb-d")},
-          R("span",{style:{fontWeight:700,fontSize:14,flex:1}},"Week of "+ws+(p?" — Published":" — Draft")),
-          p?R("button",{className:"btn btn-sm",onClick:()=>unpubWeek(ws)},"Unpublish"):null
+      const wkSummary=buildWkSummary(ws,lf,games,da,workers);
+      return R("div",{key:ws,style:{marginBottom:24,opacity:locked?1:0.7}},
+        R("div",{className:"wpb "+(p?"wpb-p":"wpb-d"),style:locked?{borderColor:"#F0C060",background:"#2A2210"}:{}},
+          R("span",{style:{fontWeight:700,fontSize:14,flex:1}},"Week of "+ws+(locked?" 🔒":"")+(p?" — Published":" — Draft")),
+          R("div",{style:{display:"flex",gap:6}},
+            locked
+              ?R("button",{className:"btn btn-sm",onClick:()=>unlockWeek(ws)},"🔓 Unlock")
+              :R("button",{className:"btn btn-sm",style:{background:"#3D2E10",color:"#F0C060",borderColor:"#E0A030"},onClick:()=>lockWeek(ws)},"🔒 Lock week"),
+            p?R("button",{className:"btn btn-sm",onClick:()=>unpubWeek(ws)},"Unpublish"):null
+          )
         ),
         wdates.filter(date=>games.some(g=>g.date===date&&(lf==="all"||g.locId===lf))).map(date=>{
           const dow=WDAYS[new Date(date+"T12:00:00").getDay()],dg=games.filter(g=>g.date===date&&(lf==="all"||g.locId===lf));
           return R("div",{key:date,style:{border:"1px solid #2E3450",borderRadius:12,padding:14,marginBottom:10,background:"#181C27"}},
-            R("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:8}},
+            R("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:10}},
               R("span",{style:{fontWeight:800,fontSize:15,color:"#6B7394"}},dow+", "+date),
               R("span",{className:"badge b-dim",style:{fontSize:10}},"Past")
             ),
             fl.map(loc=>{
               const lg=dg.filter(g=>g.locId===loc.id);if(!lg.length)return null;
-              return R("div",{key:loc.id,style:{marginBottom:8}},
-                R("span",{className:"badge b-blue",style:{marginBottom:6,display:"inline-flex"}},loc.name),
-                lg.map(game=>R("div",{key:game.id,style:{background:"#1E2333",border:"1px solid #2E3450",borderRadius:8,padding:"8px 12px",marginBottom:5,fontSize:13}},
-                  R("span",{style:{fontWeight:700}},game.division)," · ",
-                  R("span",{style:{color:"#9BA3BF"}},game.time+" · "+game.field+" · "),
-                  R("span",{className:"badge b-dim",style:{fontSize:10,marginLeft:4}},game.status)
-                ))
+              const crew=(da[dk(date,loc.id)]||{}).fieldCrew||[];
+              const draggerId=getDragger(date,loc.id);
+              const isOverridden=draggerOverrides&&draggerOverrides[dk(date,loc.id)]!=null;
+              return R("div",{key:loc.id,style:{marginBottom:12}},
+                R("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:8}},
+                  R("span",{className:"badge b-blue"},loc.name),
+                  R("button",{className:"btn btn-sm",style:{marginLeft:"auto",background:"#3D1A1A",color:"#F09090",borderColor:"#E05555"},onClick:()=>setModal({type:"rainout",date,locId:loc.id,locName:loc.name})},"⛈ Rainout")
+                ),
+                lg.map(game=>{
+                  return R("div",{key:game.id,style:{background:"#1E2333",border:"1px solid #2E3450",borderRadius:8,padding:"10px 12px",marginBottom:7}},
+                    R("div",{style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}},
+                      R("span",{style:{fontWeight:700}},game.division),
+                      R("span",{style:{color:"#9BA3BF",fontSize:12}},game.time+" · "+game.field),
+                      (game.away||game.home)&&R("span",{style:{color:"#6B7394",fontSize:11}},game.away+" vs "+game.home),
+                      R("span",{className:"badge b-dim",style:{fontSize:10,marginLeft:"auto"}},game.status)
+                    ),
+                    R(UmpSlots,{game,workers,setUmp})
+                  );
+                }),
+                R(CrewPanel,{date,locId:loc.id,da,workers,updDA,updSnackShackOpen,updConcessionsShift,loc,requests}),
+                crew.length>0&&R("div",{style:{display:"flex",alignItems:"center",gap:8,marginTop:6,padding:"6px 10px",background:"#1A1F2E",borderRadius:7,border:"1px solid #2A3050"}},
+                  R("span",{style:{fontSize:12,color:"#9BA3BF"}},"🚜 Dragger:"),
+                  R("select",{className:"inline-sel",style:{fontSize:12},value:draggerId||"",onChange:e=>setDraggerOverride(date,loc.id,Number(e.target.value))},
+                    crew.map(id=>{const w=workers.find(x=>x.id===id);const isCurrent=id===draggerId;return R("option",{key:id,value:id},(isCurrent?"🚜 ":"")+(w?.name||id)+(w?.yearsExp?" ("+w.yearsExp+"yr)":""));})
+                  ),
+                  isOverridden&&R("span",{style:{fontSize:10,color:"#E0A030",marginLeft:4}},"override"),
+                  isOverridden&&R("button",{className:"btn btn-sm",style:{fontSize:10,padding:"1px 6px"},onClick:()=>setDraggerOverride(date,loc.id,null)},"reset")
+                )
               );
-            })
+            }),
           );
-        })
+        }),
+        R(WeekShiftSummary,{entries:wkSummary})
       );
     }),
     upcomingWks.map(([ws,wdates])=>{
-      const p=pub.has(ws),wg=games.filter(g=>wkKey(g.date)===ws&&(lf==="all"||g.locId===lf));
+      const p=pub.has(ws),locked=isLocked(ws),wg=games.filter(g=>wkKey(g.date)===ws&&(lf==="all"||g.locId===lf));
       if(!wg.length)return null;
+      const wkSummary=buildWkSummary(ws,lf,games,da,workers);
       return R("div",{key:ws,style:{marginBottom:24}},
-        R("div",{className:"wpb "+(p?"wpb-p":"wpb-d")},
-          R("span",{style:{fontWeight:700,fontSize:14,flex:1}},"Week of "+ws+(p?" — Published":" — Draft")),
-          p?R("button",{className:"btn btn-sm",onClick:()=>unpubWeek(ws)},"Unpublish")
-           :R("button",{className:"btn btn-sm btn-green",onClick:()=>pubWeek(ws)},"Publish & notify workers")
+        R("div",{className:"wpb "+(p?"wpb-p":"wpb-d"),style:locked?{borderColor:"#F0C060",background:"#2A2210"}:{}},
+          R("span",{style:{fontWeight:700,fontSize:14,flex:1}},"Week of "+ws+(locked?" 🔒":"")+(p?" — Published":" — Draft")),
+          R("div",{style:{display:"flex",gap:6}},
+            locked
+              ?R("button",{className:"btn btn-sm",onClick:()=>unlockWeek(ws)},"🔓 Unlock")
+              :R("button",{className:"btn btn-sm",style:{background:"#3D2E10",color:"#F0C060",borderColor:"#E0A030"},onClick:()=>lockWeek(ws)},"🔒 Lock week"),
+            p?R("button",{className:"btn btn-sm",onClick:()=>unpubWeek(ws)},"Unpublish")
+             :R("button",{className:"btn btn-sm btn-green",onClick:()=>pubWeek(ws)},"Publish & notify workers")
+          )
         ),
         wdates.filter(date=>games.some(g=>g.date===date&&(lf==="all"||g.locId===lf))).map(date=>{
           const dow=WDAYS[new Date(date+"T12:00:00").getDay()],dg=games.filter(g=>g.date===date&&(lf==="all"||g.locId===lf));
@@ -243,7 +304,7 @@ function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAu
                     )
                   );
                 }),
-                R(CrewPanel,{date,locId:loc.id,da,workers,updDA,updSnackShackOpen,updConcessionsShift,loc}),
+                R(CrewPanel,{date,locId:loc.id,da,workers,updDA,updSnackShackOpen,updConcessionsShift,loc,requests}),
                 crew.length>0&&R("div",{style:{display:"flex",alignItems:"center",gap:8,marginTop:6,padding:"6px 10px",background:"#1A1F2E",borderRadius:7,border:"1px solid #2A3050"}},
                   R("span",{style:{fontSize:12,color:"#9BA3BF"}},"🚜 Dragger:"),
                   R("select",{
@@ -268,7 +329,8 @@ function SchedView({games,workers,da,locs,pub,isPub,pubWeek,unpubWeek,conf,runAu
               );
             })
           );
-        })
+        }),
+        R(WeekShiftSummary,{entries:wkSummary})
       );
     })
   );

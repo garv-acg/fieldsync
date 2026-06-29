@@ -30,6 +30,7 @@ function App(){
   const[user,setUser]=useState(null),[view,setView]=useState("today"),[locs,setLocs]=useState([]),[workers,setWorkers]=useState([]),[games,setGames]=useState([]),[da,setDA]=useState({}),[pub,setPub]=useState(new Set()),[rsvp,setRsvp]=useState({}),[requests,setRequests]=useState([]),[notifs,setNotifs]=useState([]),[modal,setModal]=useState(null),[toast,setToast]=useState(null),[draggerOverrides,setDraggerOverrides]=useState({}),[loaded,setLoaded]=useState(false);
   const[payConfig,setPayConfig]=useState(()=>{try{const s=localStorage.getItem('fsPayConfig');return s?JSON.parse(s):PAY_DEFAULTS}catch{return PAY_DEFAULTS}});
   const applyPayConfig=cfg=>{setPayConfig(cfg);try{localStorage.setItem('fsPayConfig',JSON.stringify(cfg))}catch{}};
+  const[lockedWeeks,setLockedWeeks]=useState(new Set());
 
   // ── Initial load from Supabase + realtime subscriptions for multi-device sync ──
   React.useEffect(()=>{
@@ -60,6 +61,8 @@ function App(){
       // Load pay config from Supabase (falls back to localStorage if table absent)
       const pc=await sb.from('settings').select('value').eq('key','pay_config').maybeSingle();
       if(pc.data?.value)applyPayConfig({...PAY_DEFAULTS,...pc.data.value});
+      const lw=await sb.from('settings').select('value').eq('key','locked_weeks').maybeSingle();
+      if(lw.data?.value)setLockedWeeks(new Set(lw.data.value));
       setLoaded(true);
     })();
 
@@ -151,6 +154,17 @@ function App(){
     swrite(sb.from('published_weeks').delete().eq('week_key',ws));
     showToast("Moved back to draft");
   };
+  const isLocked=ws=>lockedWeeks.has(ws);
+  const lockWeek=ws=>{
+    const next=new Set(lockedWeeks);next.add(ws);setLockedWeeks(next);
+    sb.from('settings').upsert({key:'locked_weeks',value:[...next]})
+      .then(({error})=>error?showToast("Lock save failed: "+error.message,"e"):showToast("Week locked — autoscheduler will skip it","s"));
+  };
+  const unlockWeek=ws=>{
+    const next=new Set(lockedWeeks);next.delete(ws);setLockedWeeks(next);
+    sb.from('settings').upsert({key:'locked_weeks',value:[...next]})
+      .then(({error})=>error?showToast("Lock save failed: "+error.message,"e"):showToast("Week unlocked","s"));
+  };
 
   // RSVP — fires manager notification on decline, with shift detail and available replacements
   const setRsvpStatus=(wId,date,locId,status)=>{
@@ -230,14 +244,18 @@ function App(){
   };
   const updConcessionsShift=(date,locId,wId,start,end)=>{
     const k=dk(date,locId);
-    setDA(p=>{const prev=p[k]||{fieldCrew:[],concessions:[],concessionsHours:{},concessionsShifts:{}};const cs={...prev.concessionsShifts,[wId]:{start,end}};return{...p,[k]:{...prev,concessionsShifts:cs}}});
-    const cs={...(da[dk(date,locId)]?.concessionsShifts||{}),[wId]:{start,end}};
-    swrite(sb.from('day_assignments').upsert({date,loc_id:locId,concessions_shifts:cs}));
+    const prev=da[k]||{fieldCrew:[],concessions:[],concessionsHours:{},concessionsShifts:{}};
+    const cs={...prev.concessionsShifts,[wId]:{start,end}};
+    setDA(p=>({...p,[k]:{...prev,concessionsShifts:cs}}));
+    sb.from('day_assignments').upsert({date,loc_id:locId,field_crew:prev.fieldCrew||[],concessions:prev.concessions||[],concessions_hours:prev.concessionsHours||{},concessions_shifts:cs,snack_shack_open:prev.snackShackOpen??true})
+      .then(({error})=>{if(error)showToast("Shift save failed: "+error.message,"e")});
   };
   const updSnackShackOpen=(date,locId,open)=>{
     const k=dk(date,locId);
-    setDA(p=>({...p,[k]:{...(p[k]||{fieldCrew:[],concessions:[],concessionsHours:{}}),snackShackOpen:open}}));
-    swrite(sb.from('day_assignments').upsert({date,loc_id:locId,snack_shack_open:open}));
+    const prev=da[k]||{fieldCrew:[],concessions:[],concessionsHours:{},concessionsShifts:{}};
+    setDA(p=>({...p,[k]:{...prev,snackShackOpen:open}}));
+    sb.from('day_assignments').upsert({date,loc_id:locId,field_crew:prev.fieldCrew||[],concessions:prev.concessions||[],concessions_hours:prev.concessionsHours||{},concessions_shifts:prev.concessionsShifts||{},snack_shack_open:open})
+      .then(({error})=>{if(error)showToast("Snack shack save failed: "+error.message,"e")});
   };
   const updPayConfig=cfg=>{const n={...payConfig,...cfg};applyPayConfig(n);swrite(sb.from('settings').upsert({key:'pay_config',value:n}));};
   const addWorker=({name,email,password,roles,avail})=>{
@@ -388,6 +406,11 @@ function App(){
     setWorkers(p=>p.map(w=>w.id===wId?{...w,availByRole:{...w.availByRole,[role]:days}}:w));
     const cur=workers.find(w=>w.id===wId)?.availByRole||{};
     swrite(sb.from('workers').update({avail_by_role:{...cur,[role]:days}}).eq('id',wId));
+  };
+  const updAvailByRoleAll=(wId,availByRole)=>{
+    const allDays=[...new Set(Object.values(availByRole).flat())];
+    setWorkers(p=>p.map(w=>w.id===wId?{...w,availByRole,avail:allDays}:w));
+    swrite(sb.from('workers').update({avail_by_role:availByRole,avail:allDays}).eq('id',wId));
     showToast("Saved","s");
   };
   const importCSV=csv=>{
@@ -429,15 +452,16 @@ function App(){
   const myNotifs=_rawNotifs.filter((n,i)=>_rawNotifs.findIndex(x=>x.msg===n.msg)===i);
   const unread=myNotifs.filter(n=>!n.read).length,pendingR=requests.filter(r=>r.status==="pending"||r.status==="pending_approval").length;
   const adminNav=[{id:"today",label:"Today"},{id:"schedule",label:"Schedule"},{id:"staff",label:"Staff",badge:conf.length},{id:"requests",label:"Requests",badge:pendingR},{id:"reports",label:"Reports"},{id:"settings",label:"Settings"}];
-  const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"notifications",label:"Notifications",badge:unread}];
+  const workerNav=[{id:"worker_home",label:"Home"},{id:"my_shifts",label:"My shifts"},{id:"my_requests",label:"Requests"},{id:"availability",label:"My Profile"},{id:"resources",label:"Resources"},{id:"notifications",label:"Notifications",badge:unread}];
   const nav=effectiveUser.role==="overseer"?adminNav:workerNav;
-  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updConcessionsShift,updSnackShackOpen,updWorkerRoles,updWorkerPayRate,addWorker,updWorkerPassword};
+  const sp={user:effectiveUser,locs,workers,games,da,pub,rsvp,requests,notifs:myNotifs,conf,draggerOverrides,getDragger:(date,locId)=>getDragger(date,locId,da,workers,draggerOverrides,requests),runAuto,swapUmps,setModal,isPub,pubWeek,unpubWeek,isLocked,lockWeek,unlockWeek,lockedWeeks,setRsvpStatus,getRsvp,setUmp,rainout,updDA,setGS,handleReq,addLoc,addField,updAvail,updAvailByRole,updAvailByRoleAll,subReq,setNotifs,showToast,addGame,editGame,delGame,importCSV,offerShift,claimShift,updYears,updPhone,setDraggerOverride,sendReminders,payConfig,updPayConfig,updConcessionsHours,updConcessionsShift,updSnackShackOpen,updWorkerRoles,updWorkerPayRate,addWorker,updWorkerPassword};
   const isWorker=effectiveUser.role!=="overseer";
   const workerBottomNav=[
     {id:"worker_home",label:"Home",icon:"🏠"},
     {id:"my_shifts",label:"Shifts",icon:"📅"},
     {id:"my_requests",label:"Requests",icon:"📋"},
     {id:"availability",label:"Profile",icon:"👤"},
+    {id:"resources",label:"Resources",icon:"📖"},
     {id:"notifications",label:"Alerts",icon:"🔔",badge:unread},
   ];
   const adminBottomNav=[
@@ -475,7 +499,7 @@ function App(){
         view==="reports"&&R(ReportsView,sp),
         view==="settings"&&R(LocsView,sp),
         view==="notifications"&&R(NotifsView,sp),
-        view==="worker_home"&&R(WHome,sp),view==="my_shifts"&&R(MyShifts,sp),view==="my_requests"&&R(MyReqs,sp),view==="availability"&&R(AvailView,sp)
+        view==="worker_home"&&R(WHome,sp),view==="my_shifts"&&R(MyShifts,sp),view==="my_requests"&&R(MyReqs,sp),view==="availability"&&R(AvailView,sp),view==="resources"&&R(ResourcesView,{effectiveUser})
       )
     ),
     R("nav",{className:"bottom-nav"},

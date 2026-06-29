@@ -55,7 +55,9 @@ function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf
           const d=da[dk(today,loc.id)]||{};
           const fc=(d.fieldCrew||[]).length,fcStatus=fc>=FC?"green":fc===0?"red":"amber";
           const ssOpen=d.snackShackOpen??true;
-          const cc=(d.concessions||[]).length,ccStatus=!ssOpen?"amber":cc>=3?"green":cc===0?"red":"amber";
+          const isSat=today&&new Date(today+"T12:00:00").getDay()===6;
+          const CC=isSat?6:3;
+          const cc=(d.concessions||[]).length,ccStatus=!ssOpen?"amber":cc>=CC?"green":cc===0?"red":"amber";
           const draggerId=getDragger(today,loc.id);
           const fcNames=(d.fieldCrew||[]).map(id=>{const w=workers.find(x=>x.id===id);return{id,name:w?.name||id,isDragger:id===draggerId}});
           const ccNames=(d.concessions||[]).map(id=>({id,name:workers.find(x=>x.id===id)?.name||id}));
@@ -75,10 +77,10 @@ function TodayView({games,workers,locs,da,setModal,sendReminders,getDragger,conf
             R("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}},
               chip(umpStatus,"Umpires "+filledSlots+"/"+totalSlots),
               chip(fcStatus,"Field crew "+fc+"/"+FC),
-              loc.hasSnackShack&&chip(ccStatus,ssOpen?"Snack shack "+cc+"/3":"Snack shack closed")
+              loc.hasSnackShack&&chip(ccStatus,ssOpen?"Snack shack "+cc+"/"+CC:"Snack shack closed")
             ),
             sectionLabel("Games & umpires"),
-            lg.map(g=>{
+            [...lg].sort((a,b)=>a.field.localeCompare(b.field,undefined,{numeric:true})||a.time.localeCompare(b.time)).map(g=>{
               const u1=workers.find(w=>w.id===g.ump1)?.name,u2=workers.find(w=>w.id===g.ump2)?.name,dual=isDual(g.division);
               return R("div",{key:g.id,style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:13,padding:"8px 0",borderTop:"1px solid #2E3450"}},
                 R("span",{style:{fontWeight:700,minWidth:90}},g.division),

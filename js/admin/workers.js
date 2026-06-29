@@ -12,7 +12,7 @@ function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig
     ),
     R("div",{className:"card"},R("div",{className:"tbl-wrap"},R("table",{className:"tbl"},
       R("thead",null,R("tr",null,
-        R("th",null,"Name"),R("th",null,"Roles"),R("th",null,"Email"),R("th",null,"Available"),R("th",null,"Shifts"),R("th",null,"Rate"),R("th",null,"")
+        R("th",null,"Name"),R("th",null,"Roles"),R("th",null,"Email"),R("th",null,"Phone"),R("th",null,"Available"),R("th",null,"Shifts"),R("th",null,"Rate"),R("th",null,"")
       )),
       R("tbody",null,workers.filter(w=>w.role!=="overseer").map(w=>{
         const roles=workerRoles(w);
@@ -37,6 +37,7 @@ function WorkersView({workers,games,da,updWorkerRoles,updWorkerPayRate,payConfig
               roles.map(r=>R("span",{key:r,className:"badge "+rb(r)},rl(r)))
             )),
             R("td",{style:{padding:"8px 10px",color:"#9BA3BF",fontSize:12}},w.email),
+            R("td",{style:{padding:"8px 10px",color:"#9BA3BF",fontSize:12}},w.phone||R("span",{style:{color:"#4A5070",fontSize:11}},"—")),
             R("td",{style:{padding:"8px 10px"}},R("div",{style:{display:"flex",gap:3,flexWrap:"wrap"}},w.avail.map(d=>R("span",{key:d,style:{padding:"1px 6px",borderRadius:4,fontSize:11,background:"#252A3D",color:"#9BA3BF"}},d)))),
             R("td",{style:{padding:"8px 10px"}},cnt),
             R("td",{style:{padding:"8px 10px"}},

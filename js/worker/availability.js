@@ -1,4 +1,4 @@
-function AvailView({user,workers,updAvailByRole,updYears,updPhone,updWorkerPassword}){
+function AvailView({user,workers,updAvailByRole,updAvailByRoleAll,updYears,updPhone,updWorkerPassword}){
   const w=workers.find(x=>x.id===user.id);
   const myRoles=(w?.roles&&w.roles.length)?w.roles:(user.roles&&user.roles.length)?user.roles:[w?.role||user.role];
   const[activeRole,setActiveRole]=useState(myRoles[0]);
@@ -8,13 +8,14 @@ function AvailView({user,workers,updAvailByRole,updYears,updPhone,updWorkerPassw
   const[curPass,setCurPass]=useState(""),[newPass,setNewPass]=useState(""),[confirmPass,setConfirmPass]=useState(""),[passErr,setPassErr]=useState(""),[passSaved,setPassSaved]=useState(false);
 
   // Per-role availability state
-  const initAvail=role=>(w?.availByRole&&w.availByRole[role])||w?.avail||[];
-  const[selByRole,setSelByRole]=useState(()=>{const o={};myRoles.forEach(r=>{o[r]=initAvail(r)});return o});
+  const initAvail=(role,ww)=>(ww?.availByRole&&ww.availByRole[role])||ww?.avail||[];
+  const[selByRole,setSelByRole]=useState(()=>{const o={};myRoles.forEach(r=>{o[r]=initAvail(r,w)});return o});
+  React.useEffect(()=>{if(!w)return;setSelByRole(()=>{const o={};myRoles.forEach(r=>{o[r]=initAvail(r,w)});return o});},[w?.id,JSON.stringify(w?.availByRole)]);
 
   const tog=d=>setSelByRole(p=>({...p,[activeRole]:p[activeRole].includes(d)?p[activeRole].filter(x=>x!==d):[...p[activeRole],d]}));
 
   const save=()=>{
-    myRoles.forEach(r=>updAvailByRole(user.id,r,selByRole[r]));
+    updAvailByRoleAll(user.id,selByRole);
     updYears(user.id,yrs);
     updPhone(user.id,phone);
     setSaved(true);setTimeout(()=>setSaved(false),2000);
