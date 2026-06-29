@@ -2,11 +2,21 @@ function WHome({user,games,da,workers,locs,isPub,rsvp,setRsvpStatus,getRsvp,save
   const today=new Date().toISOString().slice(0,10);
   const[sel,setSel]=useState(today);
   const[pushState,setPushState]=useState(()=>('Notification' in window?Notification.permission:'unsupported'));
+  const[pushSaved,setPushSaved]=useState(false);
+
+  // Auto-subscribe on load if permission already granted but subscription may not be saved
+  useEffect(()=>{
+    if(Notification.permission==='granted'&&'serviceWorker' in navigator&&savePushSub){
+      savePushSub(user.id).then(()=>setPushSaved(true)).catch(()=>{});
+    }
+  },[user.id]);
+
   const enablePush=async()=>{
     setPushState('requesting');
     await savePushSub(user.id);
-    setPushState('Notification' in window?Notification.permission:'unsupported');
-    if(Notification.permission==='granted')showToast("Notifications enabled","s");
+    const perm='Notification' in window?Notification.permission:'unsupported';
+    setPushState(perm);setPushSaved(true);
+    if(perm==='granted')showToast("Notifications enabled","s");
     else showToast("Notifications blocked — check your browser settings","w");
   };
   const d0=new Date(today+"T12:00:00"),wd=[];
