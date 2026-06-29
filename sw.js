@@ -1,4 +1,4 @@
-const CACHE = 'fieldsync-v3';
+const CACHE = 'fieldsync-v4';
 
 const SHELL = [
   '/',
