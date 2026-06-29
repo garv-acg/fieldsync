@@ -1,20 +1,17 @@
 const webpush = require('web-push');
 
+// VAPID public key is intentionally hardcoded (it is not a secret)
+const VAPID_PUBLIC = 'BNIZohQ7q12o5w1j0MCLxqjvuKwjkyBiNgl0x_uXMcmhmfaCCWAW84DySKbo-hSYyCYtsbDipfog78mGC4Azvlk';
+
 webpush.setVapidDetails(
   'mailto:agarver20@outlook.com',
-  process.env.VAPID_PUBLIC_KEY,
+  VAPID_PUBLIC,
   process.env.VAPID_PRIVATE_KEY
 );
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method not allowed' };
-  }
-
-  // Simple auth check — only the app itself can call this
-  const auth = event.headers['x-fieldsync-key'];
-  if (auth !== process.env.PUSH_SECRET) {
-    return { statusCode: 401, body: 'Unauthorized' };
   }
 
   let body;

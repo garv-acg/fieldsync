@@ -140,7 +140,7 @@ function App(){
     if(!subs.length)return;
     fetch('/.netlify/functions/send-push',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-fieldsync-key':'fs-push-2026'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({subscriptions:subs,title,message,url})
     }).catch(e=>console.warn('Push send failed:',e));
   };

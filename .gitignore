@@ -1,2 +1,7 @@
 node_modules/
 .DS_Store
+.env
+**/.env
+*.env
+icons/gen-icons.js
+icons/gen-png.js
