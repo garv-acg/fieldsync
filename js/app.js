@@ -117,6 +117,8 @@ function App(){
   // ── Web Push helpers ───────────────────────────────────────────────
   const VAPID_PUBLIC='BNIZohQ7q12o5w1j0MCLxqjvuKwjkyBiNgl0x_uXMcmhmfaCCWAW84DySKbo-hSYyCYtsbDipfog78mGC4Azvlk';
 
+  const urlB64ToUint8Array=b64=>{const pad='='.repeat((4-b64.length%4)%4);const raw=atob((b64+pad).replace(/-/g,'+').replace(/_/g,'/'));const arr=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);return arr};
+
   const subscribeToPush=async()=>{
     if(!('serviceWorker' in navigator)||!('PushManager' in window))return null;
     const perm=await Notification.requestPermission();
@@ -124,7 +126,7 @@ function App(){
     const reg=await navigator.serviceWorker.ready;
     const existing=await reg.pushManager.getSubscription();
     if(existing)return existing;
-    return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:VAPID_PUBLIC});
+    return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToUint8Array(VAPID_PUBLIC)});
   };
 
   const savePushSub=async(wId)=>{
