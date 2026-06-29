@@ -131,8 +131,10 @@ function App(){
 
   const savePushSub=async(wId)=>{
     const sub=await subscribeToPush();
-    if(!sub)return;
-    await sb.from('push_subscriptions').upsert({worker_id:wId,sub:sub.toJSON()},{onConflict:'worker_id'});
+    if(!sub)throw new Error('No subscription returned from browser');
+    const subJson=sub.toJSON();
+    const{error}=await sb.from('push_subscriptions').upsert({worker_id:wId,sub:subJson},{onConflict:'worker_id'});
+    if(error)throw new Error('DB error: '+error.message+' (wId='+wId+')');
   };
 
   const sendPush=async(workerIds,title,message,url='/')=>{
