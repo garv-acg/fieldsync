@@ -149,7 +149,7 @@ function App(){
     }).catch(e=>console.warn('Push send failed:',e));
   };
 
-  const conf=useMemo(()=>detConf(games,workers,da,locs),[games,workers,da,locs]);
+const conf=useMemo(()=>detConf(games,workers,da,locs),[games,workers,da,locs]);
 
   const runAuto=()=>{
     const r=autoSched(games,workers,da,requests,locs);
@@ -329,6 +329,7 @@ function App(){
       sb.functions.invoke('send-reminder',{body:{recipients,subject:"FieldSync reminder",message:"Reminder: you're scheduled on "+date+" — check My Shifts in FieldSync for details."}})
         .then(({error})=>{if(error)console.error("Reminder dispatch failed:",error)});
     }
+    if(aff.size>0)sendPush([...aff],"⏰ FieldSync reminder","You're scheduled on "+date+" — tap to view your shifts.","/");
     showToast(aff.size>0?"Reminders sent to "+aff.size+" worker"+(aff.size>1?"s":""):"No one scheduled that day",aff.size>0?"s":"info");
   };
 
@@ -366,6 +367,9 @@ function App(){
     const nr={id:Date.now(),type:"shift_offer",workerId:wId,date,locId,role,label,claimedBy:null,status:"pending",created:new Date().toISOString().slice(0,10)};
     setRequests(p=>[nr,...p]);
     swrite(sb.from('requests').insert({id:nr.id,type:nr.type,worker_id:nr.workerId,date:nr.date,loc_id:nr.locId,role:nr.role,label:nr.label,claimed_by:null,status:nr.status,created:nr.created}));
+    const eligible=workers.filter(w=>w.id!==wId&&hasRole(w,role)&&wa(w,date,requests,role)).map(w=>w.id);
+    const offerer=workers.find(w=>w.id===wId);
+    if(eligible.length)sendPush(eligible,"🔄 Shift available",offerer?.name+" offered up their "+role+" shift on "+date+(label?" ("+label+")":"")+" — tap to claim it.","/");
     showToast("Shift offered up — teammates can now claim it");
   };
 
